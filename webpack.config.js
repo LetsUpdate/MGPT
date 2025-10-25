@@ -67,7 +67,8 @@ module.exports = {
                                     'https://v39.moodle.uniduna.hu/*',
                                     'https://mentok.net/*',
                                     'https://moodle.ch.bme.hu/*',
-                                    'https://kmooc.uni-obuda.hu/*'
+                                    'https://kmooc.uni-obuda.hu/*',
+                                    'https://old.main.elearning.uni-obuda.hu/*',
                                 ],
                                 noframes: true,
                                 grant: [

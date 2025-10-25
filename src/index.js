@@ -1,13 +1,14 @@
-const utils = require("./utils");
+/* const utils = require("./utils");
 const { LookForCaptcha } = require('./captchaSolver');
 const {PlaceLogo} = require('./UImodul');
-
+ */
+const configPanel = require("./configPanel");
 
 
 (function () {
     'use strict';
 
-    if (utils.isNeptunPage() && utils.isLoginPage()) {
+/*     if (utils.isNeptunPage() && utils.isLoginPage()) {
         // Set up a Mutation Observer to watch for changes in the DOM
 
         //Prevent npu to press login after the user too
@@ -22,5 +23,14 @@ const {PlaceLogo} = require('./UImodul');
         console.log("LookForCaptcha");
         PlaceLogo();
         LookForCaptcha();
+    } */
+
+    // Initialize config panel when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', configPanel.init);
+    } else {
+        configPanel.init();
     }
+
+
 })();
