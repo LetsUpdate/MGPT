@@ -1,8 +1,13 @@
 // Question Solver Module
-const gptManager = require('./gptManager');
+//const gptManager = require('./gptManager');
+const {gptManager, AnswerType} = require('./gptManager');
+
 
 class QuestionSolver {
     constructor() {
+
+        print(AnswerType.CHECKBOX);
+
         // DOM selector configurations
         this.selectors = {
             questionNode: {
@@ -28,10 +33,10 @@ class QuestionSolver {
         };
         this.pageMatchers = [
             {
-                matchString: 'canvas',
+                matchString: 'default',
                 testPage: {
                     match: (url) => {
-                        return url.includes('canvas') && url.includes('/quizzes/') && url.includes('/take');
+                        return  url.includes('/quizzes/') && url.includes('/take');
                     },
                     action: (url) => {
                         this.handleCanvasQuiz(url);
@@ -92,7 +97,7 @@ class QuestionSolver {
     handlePageMatch(url) {
         try {
             this.pageMatchers.some((matcher) => {
-                if (url.includes(matcher.matchString)) {
+               
                     if (matcher.testPage && matcher.testPage.match(url)) {
                         matcher.testPage.action(url);
                         return true;
@@ -103,7 +108,7 @@ class QuestionSolver {
                         matcher.default.action(url);
                         return true;
                     }
-                }
+      
                 return false;
             });
         } catch (error) {
@@ -309,6 +314,7 @@ class QuestionSolver {
             };
 
         } catch (error) {
+            console.log('Could not process question node:', node, error);
             console.error('Error processing question:', error);
             return { success: false };
         }
@@ -344,10 +350,10 @@ class QuestionSolver {
         const checkboxes = node.querySelectorAll(this.selectors.questionNode.checkbox);
         const select = node.querySelector(this.selectors.questionNode.select);
 
-        if (textAnswer) return 'text';
-        if (multipleChoice.length > 0) return 'radio';
-        if (checkboxes.length > 0) return 'checkbox';
-        if (select) return 'select';
+        if (textAnswer) return AnswerType.TEXT;
+        if (multipleChoice.length > 0) return AnswerType.RADIO;
+        if (checkboxes.length > 0) return AnswerType.CHECKBOX;
+        if (select) return AnswerType.SELECT;
         return 'unknown';
     }
 
@@ -359,20 +365,20 @@ class QuestionSolver {
      */
     async getAnswerElementsByType(node, type) {
         switch(type) {
-            case 'text':
+            case AnswerType.TEXT:
                 const textInput = node.querySelector(this.selectors.questionNode.textAnswer);
                 return textInput ? [textInput] : [];
 
-            case 'radio':
-            case 'checkbox':
-                const selector = type === 'radio' ? 
+            case AnswerType.RADIO:
+            case AnswerType.CHECKBOX:
+                const selector = type === AnswerType.RADIO ? 
                     this.selectors.questionNode.multipleChoice : 
                     this.selectors.questionNode.checkbox;
                 return Array.from(node.querySelectorAll(
                     `${this.selectors.questionNode.answerContainer} ${selector}`
                 ));
 
-            case 'select':
+            case AnswerType.SELECT:
                 const select = node.querySelector(this.selectors.questionNode.select);
                 return select ? [select] : [];
 
@@ -387,40 +393,103 @@ class QuestionSolver {
      * @returns {string} A talált szöveg
      */
     findAnswerText(element) {
-        // Először próbáljuk meg a címkét megtalálni
-        const label = element.closest('label');
-        if (label) {
-            // Klónozzuk az elemet, hogy eltávolíthassuk az input-ot
-            const clone = label.cloneNode(true);
-            const input = clone.querySelector('input');
-            if (input) input.remove();
-            return clone.textContent.trim();
-        }
+        try {
+            // 1. Próbáljuk meg megtalálni a hozzá tartozó label elemet az ID alapján
+            if (element.id) {
+                const associatedLabel = document.querySelector(`label[for="${element.id}"]`);
+                if (associatedLabel) {
+                    return associatedLabel.textContent.trim();
+                }
+            }
 
-        // Ha nincs címke, keressük a legközelebbi szöveget tartalmazó elemet
-        let parent = element.parentElement;
-        while (parent) {
-            const text = Array.from(parent.childNodes)
-                .filter(node => node.nodeType === 3) // Csak szöveg node-ok
-                .map(node => node.textContent.trim())
-                .filter(text => text.length > 0)
-                .join(' ');
-            
-            if (text) return text;
-            parent = parent.parentElement;
-        }
+            // 2. Ellenőrizzük, hogy az input egy label-en belül van-e
+            const parentLabel = element.closest('label');
+            if (parentLabel) {
+                // Klónozzuk a label-t és távolítsuk el belőle az input-ot
+                const clone = parentLabel.cloneNode(true);
+                const inputs = clone.querySelectorAll('input');
+                inputs.forEach(input => input.remove());
+                return clone.textContent.trim();
+            }
 
-        return 'Unknown answer';
+            // 3. Keressünk testvér elemet, ami label vagy tartalmazza a szöveget
+            const siblings = Array.from(element.parentElement.children);
+            for (const sibling of siblings) {
+                if (sibling !== element && sibling.tagName === 'LABEL') {
+                    return sibling.textContent.trim();
+                }
+            }
+
+            // 4. Keressük a legközelebbi szöveges tartalmat
+            let parent = element.parentElement;
+            while (parent) {
+                // Csak a közvetlen szöveg node-okat nézzük
+                const textNodes = Array.from(parent.childNodes)
+                    .filter(node => node.nodeType === 3)
+                    .map(node => node.textContent.trim())
+                    .filter(text => text.length > 0);
+
+                if (textNodes.length > 0) {
+                    return textNodes.join(' ');
+                }
+
+                // Ha van .ml-1 osztályú elem (Moodle specifikus), azt is nézzük meg
+                const ml1Element = parent.querySelector('.ml-1');
+                if (ml1Element) {
+                    return ml1Element.textContent.trim();
+                }
+
+                parent = parent.parentElement;
+            }
+
+            console.warn('Could not find answer text for element:', element);
+            return 'Unknown answer';
+        } catch (error) {
+            console.error('Error finding answer text:', error);
+            return 'Error finding answer text';
+        }
     }
 
 
     applyModificationsToQuestion(questionData) {
-        questionData
+        if (!questionData || !questionData.success) {
+            console.warn('Invalid question data, cannot apply modifications');
+            return;
+        }
 
+        if (questionData.data.type === AnswerType.SELECT) {
+            console.warn('Select question type modification not implemented yet');
+            return;
+        }
+
+        // Debug log to see the structure
+        console.log('Question Data Structure:', {
+            elements: questionData.elements,
+            data: questionData.data
+        });
+
+        if (questionData.elements && questionData.elements.questionElement) {
+            // Add click event listener to the question element
+            questionData.elements.questionElement.addEventListener('click', async () => {
+                try {
+                    console.log('Question clicked:', questionData.data.question);
+                    const gptResponse = await gptManager.askGPT(
+                        questionData.data.question,
+                        questionData.data.answers.map(ans => ans.text),
+                        questionData.data.type
+                    );
+                    console.log('GPT Response:', gptResponse);
+                    // Here you can apply the GPT response to the UI as needed
+                } catch (error) {
+                    console.error('Error getting GPT answer:', error);
+                }
+            });
+            console.log('Click listener added to question:', questionData.data.question);
+        } else {
+            console.error('Question element not found in:', questionData);
+        }
     }
 }
-
-
 
 
 // Export singleton instance

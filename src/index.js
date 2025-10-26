@@ -5,7 +5,7 @@ const {PlaceLogo} = require('./UImodul');
 const configPanel = require("./configPanel");
 const configStore = require("./configStore");
 const questionSolver = require("./questionSolver");
-const solverPanel = require("./solverPanel");
+
 
 
 (function () {

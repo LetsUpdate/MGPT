@@ -2,6 +2,10 @@
 const configStore = require('./configStore');
 const scriptConfig = require('./config');
 
+
+// Global GPT manager instance
+let gptManagerInstance = null;
+
 // Answer type enum
 const AnswerType = {
     CHECKBOX: 'checkbox',
@@ -10,10 +14,11 @@ const AnswerType = {
     SELECT: 'select'
 };
 
-// Global GPT manager instance
-let gptManagerInstance = null;
 
 class GPTManager {
+
+    
+
     constructor() {
         if (gptManagerInstance) {
             return gptManagerInstance;
@@ -108,14 +113,12 @@ class GPTManager {
                             content: fullPrompt 
                         }
                     ],
-                    temperature: config.temperature || 0.7,
-                    max_tokens: config.maxTokens || 2000,
                     ...options
                 }),
                 onload: (response) => {
                     try {
                         if (response.status !== 200) {
-                            throw new Error('HTTP error! status: ' + response.status);
+                            throw new Error('HTTP error! status: ' + response.status +'/n'+response.response);
                         }
 
                         const data = JSON.parse(response.responseText);
@@ -211,6 +214,6 @@ class GPTManager {
     }
 }
 
-// Export singleton instance
+// Export singleton instance and AnswerType enum
 const gptManager = new GPTManager();
-module.exports = gptManager;
+module.exports = { gptManager, AnswerType };

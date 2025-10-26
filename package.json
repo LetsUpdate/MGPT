@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AI-powered learning assistant for Moodle",
   "main": "src/index.js",
+  "types": "src/questionSolver.d.ts",
   "scripts": {
     "build:prod": "webpack",
     "build:dev": "cross-env NODE_ENV=development webpack",
