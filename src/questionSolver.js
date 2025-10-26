@@ -31,33 +31,6 @@ class QuestionSolver {
         };
         this.pageMatchers = [
             {
-                matchString: 'default',
-                testPage: {
-                    match: (url) => {
-                        return  url.includes('/quizzes/') && url.includes('/take');
-                    },
-                    action: (url) => {
-                        this.handleCanvasQuiz(url);
-                    }
-                },
-                resultPage: {
-                    match: (url) => {
-                        return url.includes('canvas') && url.includes('/quizzes/') && url.includes('/results');
-                    },
-                    action: (url) => {
-                        this.handleCanvasResults(url);
-                    }
-                },
-                default: {
-                    match: (url) => {
-                        return url.includes('canvas');
-                    },
-                    action: (url) => {
-                        this.handleCanvasDefault(url);
-                    }
-                }
-            },
-            {
                 matchString: 'moodle',
                 testPage: {
                     match: (url) => {
@@ -369,6 +342,7 @@ class QuestionSolver {
 
             case AnswerType.RADIO:
             case AnswerType.CHECKBOX:
+
                 const selector = type === AnswerType.RADIO ? 
                     this.selectors.questionNode.multipleChoice : 
                     this.selectors.questionNode.checkbox;
@@ -488,7 +462,15 @@ class QuestionSolver {
 
                         case AnswerType.RADIO:
                             const radioAnswer = gptResponse.correctAnswers[0] || '';
+                            
                             questionData.data.answers.forEach(ans => {
+                                //if radioanwser is a number index
+                                if (!isNaN(radioAnswer)) {
+                                    const index = parseInt(radioAnswer, 10);
+                                    if (questionData.data.answers[index] && ans.text === questionData.data.answers[index].text) {
+                                        ans.element.checked = true;
+                                    }
+                                } else
                                 if (ans.text.toLowerCase() === radioAnswer.toLowerCase()) {
                                     //click on element
                                     ans.element.checked = true;
@@ -498,7 +480,16 @@ class QuestionSolver {
 
                         case AnswerType.CHECKBOX:
                             const checkboxAnswers = gptResponse.correctAnswers || [];
+                            
                             questionData.data.answers.forEach(ans => {
+                                //if radioanwser is a number index
+                                ans.element.checked = false; //reset first
+                                if (!isNaN(checkboxAnswers[0])) {
+                                    const indices = checkboxAnswers.map(a => parseInt(a, 10));
+                                    if (indices.includes(questionData.data.answers.indexOf(ans))) {
+                                        ans.element.checked = true;
+                                    }
+                                }else
                                 if (checkboxAnswers.map(a => a.toLowerCase()).includes(ans.text.toLowerCase())) {
                                     ans.element.checked = true;
                                 }

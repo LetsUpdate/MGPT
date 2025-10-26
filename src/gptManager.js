@@ -207,11 +207,32 @@ class GPTManager {
                             // Validate the answer against possible answers if they exist
                             if (possibleAnswer && possibleAnswer.length > 0) {
                                 if (parsedAnswer.correctAnswers) {
-                                    // Ensure all answers are from the possible answers list
-                                    parsedAnswer.correctAnswers = parsedAnswer.correctAnswers.filter(
-                                        ans => possibleAnswer.includes(ans)
-                                    );
-                                    
+                                    // Allow the assistant to return zero-based indices (numbers) or numeric strings.
+                                    // If indices are provided, map them to the possibleAnswer values.
+                                    const mapped = parsedAnswer.correctAnswers.map(ans => {
+                                        // numeric index (number or numeric string)
+                                        if (typeof ans === 'number' || (!isNaN(ans) && ans.toString().trim() !== '')) {
+                                            const idx = Number(ans);
+                                            // ensure 0-based index
+                                            if (Number.isInteger(idx) && idx >= 0 && idx < possibleAnswer.length) {
+                                                return possibleAnswer[idx];
+                                            }
+                                            return null;
+                                        }
+                                        // otherwise treat as text and try to find exact match
+                                        if (typeof ans === 'string') return ans;
+                                        return null;
+                                    }).filter(x => x !== null);
+
+                                    // If mapping produced some answers, use them. Else, fall back to original filter by text.
+                                    if (mapped.length > 0) {
+                                        parsedAnswer.correctAnswers = mapped;
+                                    } else {
+                                        parsedAnswer.correctAnswers = parsedAnswer.correctAnswers.filter(
+                                            ans => possibleAnswer.includes(ans)
+                                        );
+                                    }
+
                                     // For radio, ensure only one answer
                                     if (answerType === AnswerType.RADIO && parsedAnswer.correctAnswers.length > 1) {
                                         parsedAnswer.correctAnswers = [parsedAnswer.correctAnswers[0]];

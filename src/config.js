@@ -53,6 +53,13 @@ const config = {
      "correctAnswers": ["answer1"]  // Always exactly one answer
    }
 
+Important: for multiple choice / select / checkbox / radio questions you may return the answers as zero-based indices
+referring to the "Possible answers" list. Example:
+
+{"type": "checkbox", "correctAnswers": [0, 1, 4]}
+
+It is critical that these indices start at 0. The assistant may also return answer text strings instead of indices; both are accepted.
+
 Remember to:
 - Be clear and concise
 - Focus on understanding over memorization
