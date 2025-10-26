@@ -3,6 +3,7 @@ const { LookForCaptcha } = require('./captchaSolver');
 const {PlaceLogo} = require('./UImodul');
  */
 const configPanel = require("./configPanel");
+const configStore = require("./configStore");
 
 
 (function () {
@@ -25,11 +26,27 @@ const configPanel = require("./configPanel");
         LookForCaptcha();
     } */
 
-    // Initialize config panel when DOM is ready
+    // Initialize the application
+    const init = async () => {
+        try {
+            // First load the configuration
+            await configStore.load();
+            
+            // Then initialize the config panel
+            configPanel.init();
+
+            // Additional initialization can be added here
+            console.log('MoodleGPT initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize MoodleGPT:', error);
+        }
+    };
+
+    // Run initialization when DOM is ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', configPanel.init);
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        configPanel.init();
+        init();
     }
 
 

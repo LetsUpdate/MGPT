@@ -1,19 +1,14 @@
 // Configuration Panel Module
+const configStore = require('./configStore');
+
 const ConfigPanel = (() => {
   const usf = unsafeWindow;
   
   // Constants
   const KEY_COMBO_SHOW = 'Alt+Shift+C'; // Key combination to show/hide panel
-  const STORAGE_KEY = 'gptConfig';
-  const DEFAULT_CONFIG = {
-    apiKey: '',
-    model: 'o1-mini',
-    xisConfigured: false
-  };
 
   // State
   let isVisible = false;
-  let config = { ...DEFAULT_CONFIG };
   let panelElement = null;
   let overlay = null;
 
@@ -93,6 +88,8 @@ const ConfigPanel = (() => {
   const createPanel = () => {
     const panel = document.createElement('div');
     panel.className = 'gpt-config-panel';
+    const currentConfig = configStore.getConfig();
+    
     panel.innerHTML = `
       <div class="gpt-config-header">
         <h3>GPT Configuration</h3>
@@ -101,15 +98,19 @@ const ConfigPanel = (() => {
       <div class="gpt-config-content">
         <div class="gpt-config-field">
           <label for="apiKey">API Key:</label>
-          <input type="password" id="apiKey" value="${config.apiKey}">
+          <input type="password" id="apiKey" value="${currentConfig.apiKey}">
         </div>
         <div class="gpt-config-field">
           <label for="model">Model:</label>
           <select id="model">
-            <option value="o1-mini" ${config.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors & Költséghatékony)</option>
-            <option value="gpt-4o" ${config.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (Legfejlettebb)</option>
-            <option value="gpt-5" ${config.model === 'gpt-5' ? 'selected' : ''}>GPT-5 (Haladó)</option>
+            <option value="o1-mini" ${currentConfig.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors & Költséghatékony)</option>
+            <option value="gpt-4o" ${currentConfig.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (Legfejlettebb)</option>
+            <option value="gpt-5" ${currentConfig.model === 'gpt-5' ? 'selected' : ''}>GPT-5 (Haladó)</option>
           </select>
+        </div>
+        <div class="gpt-config-field">
+          <label for="apiUrl">API URL:</label>
+          <input type="text" id="apiUrl" value="${currentConfig.apiUrl}">
         </div>
         <button class="gpt-config-save">Save Settings</button>
       </div>
@@ -196,34 +197,8 @@ const ConfigPanel = (() => {
     overlay.appendChild(element);
   };
 
-  // Load saved config
-  const loadConfig = () => {
-    return new Promise((resolve) => {
-      try {
-        const savedConfig = JSON.parse(GM_getValue(STORAGE_KEY));
-        if (savedConfig) {
-          config = { ...DEFAULT_CONFIG, ...savedConfig };
-          // Ellenőrizzük, hogy a betöltött konfig érvényes-e
-          config.isConfigured = isValidApiKey(config.apiKey);
-          // Ha változott az isConfigured, mentsük el
-          if (config.isConfigured !== savedConfig.isConfigured) {
-            GM_setValue(STORAGE_KEY, JSON.stringify(config));
-          }
-        }
-
-        resolve(config);
-      } catch (e) {
-        console.warn('Failed to load config:', e);
-        config = { ...DEFAULT_CONFIG };
-        config.isConfigured = false;
-        resolve(config);
-      }
-    });
-  };
-
   // Initialize the panel
-  const init = async () => {
-    await loadConfig();
+  const init =  () => {
 
     // Create stealth overlay and panel
     overlay = createStealthOverlay();
@@ -235,10 +210,16 @@ const ConfigPanel = (() => {
     panelElement.querySelector('.gpt-config-close').addEventListener('click', hide);
     panelElement.querySelector('.gpt-config-save').addEventListener('click', saveSettings);
 
+    const currentConfig = configStore.getConfig();
     // Show panel on first launch if not configured
-    if (!config.isConfigured) {
+    if (!currentConfig.isConfigured) {
       show();
     }
+
+    // Add config change listener
+    configStore.addListener((newConfig) => {
+      updatePanelValues(newConfig);
+    });
   };
 
   // Event handler for key combinations
@@ -246,7 +227,7 @@ const ConfigPanel = (() => {
     // Shift + Control + H
     if (event.shiftKey && event.ctrlKey && event.key.toLowerCase() === 'h') {
       toggle();
-      event.preventDefault(); // Megelőzzük az alapértelmezett böngésző előzmények megnyitását
+      event.preventDefault(); // Prevent browser history from opening
       return;
     }
   };
@@ -264,6 +245,7 @@ const ConfigPanel = (() => {
   const show = () => {
     isVisible = true;
     panelElement.classList.add('visible');
+    updatePanelValues(configStore.getConfig());
   };
 
   // Hide panel
@@ -272,45 +254,53 @@ const ConfigPanel = (() => {
     panelElement.classList.remove('visible');
   };
 
+  // Update panel values with current config
+  const updatePanelValues = (config) => {
+    if (!panelElement) return;
+    
+    const apiKeyInput = panelElement.querySelector('#apiKey');
+    const modelSelect = panelElement.querySelector('#model');
+    const apiUrlInput = panelElement.querySelector('#apiUrl');
+
+    if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
+    if (modelSelect) modelSelect.value = config.model || 'o1-mini';
+    if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
+  };
+
   // Validate API key
   const isValidApiKey = (key) => {
-    return key && key.trim().length >= 32; // Minimum hossz egy API kulcshoz
+    return key && key.trim().length >= 32; // Minimum length for API key
   };
 
   // Save settings
   const saveSettings = () => {
     const apiKey = panelElement.querySelector('#apiKey').value;
     const model = panelElement.querySelector('#model').value;
+    const apiUrl = panelElement.querySelector('#apiUrl').value;
 
-    // Csak akkor állítjuk be isConfigured-ot true-ra, ha valid API kulcs van
-    const isConfigured = isValidApiKey(apiKey);
+    // Only set isConfigured to true if API key is valid
+    if (!isValidApiKey(apiKey)) {
+      alert('Please enter a valid API key!');
+      return;
+    }
 
     const newConfig = {
       apiKey,
       model,
-      isConfigured
+      apiUrl,
+      isConfigured: true
     };
 
-    if (!isConfigured) {
-      alert('Kérlek adj meg egy érvényes API kulcsot!');
-      return;
-    }
-
-    config = { ...config, ...newConfig };
-    GM_setValue(STORAGE_KEY, JSON.stringify(config));
+    configStore.update(newConfig);
     hide();
   };
-
-  // Get current config
-  const getConfig = () => ({ ...config });
 
   // Public API
   return {
     init,
     show,
     hide,
-    toggle,
-    getConfig
+    toggle
   };
 })();
 
