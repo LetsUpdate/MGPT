@@ -148,6 +148,12 @@ class QuestionSolver {
      */
     getQuestionNodes() {
         const variants = {
+            // Moodle: each question is wrapped in a div.que (e.g., <div id="question-..." class="que multichoice ...">)
+            moodleQuestions: () => {
+                const nodes = Array.from(document.querySelectorAll('div.que'))
+                    .filter(n => n.querySelector('.qtext') && n.querySelector('.answer'));
+                return nodes.length > 0 ? nodes : null;
+            },
             hasInformationText: () => {
                 const form = document.getElementsByTagName(this.selectors.questionNode.form)[1];
                 if (!form) return null;
@@ -366,6 +372,19 @@ class QuestionSolver {
      */
     findAnswerText(element) {
         try {
+            // 0. Moodle often uses aria-labelledby to tie inputs to a text container
+            const aria = element.getAttribute && element.getAttribute('aria-labelledby');
+            if (aria) {
+                const ids = aria.split(/\s+/).filter(Boolean);
+                const parts = ids.map(id => document.getElementById(id))
+                    .filter(el => !!el)
+                    .map(el => el.textContent.trim())
+                    .filter(t => t.length > 0);
+                if (parts.length > 0) {
+                    return parts.join(' ').replace(/\s+/g, ' ').trim();
+                }
+            }
+
             // 1. Próbáljuk meg megtalálni a hozzá tartozó label elemet az ID alapján
             if (element.id) {
                 const associatedLabel = document.querySelector(`label[for="${element.id}"]`);
@@ -452,6 +471,21 @@ class QuestionSolver {
                     );
                     console.log('GPT Response:', gptResponse);
 
+                    const elems = questionData.elements.answerElements || [];
+                    const answersData = questionData.data.answers || [];
+                    const toIndex = (ans) => {
+                        // Convert a single answer (number or text) to index within this question
+                        if (ans === null || ans === undefined) return -1;
+                        // number-like
+                        if (!isNaN(ans)) {
+                            const idx = parseInt(ans, 10);
+                            return (idx >= 0 && idx < elems.length) ? idx : -1;
+                        }
+                        // text match (case-insensitive)
+                        const lower = String(ans).trim().toLowerCase();
+                        return answersData.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+                    };
+
                     switch (questionData.data.type) {
                         case AnswerType.TEXT:
                             const textAnswer = gptResponse.correctAnswers || '';
@@ -461,37 +495,33 @@ class QuestionSolver {
                             break;
 
                         case AnswerType.RADIO:
-                            const radioAnswer = gptResponse.correctAnswers[0] || '';
-                            
-                            questionData.data.answers.forEach(ans => {
-                                //if radioanwser is a number index
-                                if (!isNaN(radioAnswer)) {
-                                    const index = parseInt(radioAnswer, 10);
-                                    if (questionData.data.answers[index] && ans.text === questionData.data.answers[index].text) {
-                                        ans.element.checked = true;
-                                    }
-                                } else
-                                if (ans.text.toLowerCase() === radioAnswer.toLowerCase()) {
-                                    //click on element
-                                    ans.element.checked = true;
-                                }
-                            });
+                            // Normalize to index and check within this question only
+                            const radioIdx = toIndex((gptResponse.correctAnswers || [])[0]);
+                            if (radioIdx >= 0 && elems[radioIdx]) {
+                                // uncheck others first to be safe
+                                elems.forEach(el => { if (el.type === 'radio') el.checked = false; });
+                                elems[radioIdx].checked = true;
+                                elems[radioIdx].dispatchEvent(new Event('change', { bubbles: true }));
+                            }
                             break;
 
                         case AnswerType.CHECKBOX:
-                            const checkboxAnswers = gptResponse.correctAnswers || [];
-                            
-                            questionData.data.answers.forEach(ans => {
-                                //if radioanwser is a number index
-                                ans.element.checked = false; //reset first
-                                if (!isNaN(checkboxAnswers[0])) {
-                                    const indices = checkboxAnswers.map(a => parseInt(a, 10));
-                                    if (indices.includes(questionData.data.answers.indexOf(ans))) {
-                                        ans.element.checked = true;
-                                    }
-                                }else
-                                if (checkboxAnswers.map(a => a.toLowerCase()).includes(ans.text.toLowerCase())) {
-                                    ans.element.checked = true;
+                            const checkboxAnswers = Array.isArray(gptResponse.correctAnswers) ? gptResponse.correctAnswers : [];
+                            const indexSet = new Set(
+                                checkboxAnswers
+                                    .map(a => toIndex(a))
+                                    .filter(i => i >= 0 && i < elems.length)
+                            );
+                            // reset all, then set selected indices
+                            elems.forEach((el, i) => {
+                                if (el.type === 'checkbox') {
+                                    el.checked = indexSet.has(i);
+                                }
+                            });
+                            // optional: dispatch change for all toggled
+                            elems.forEach((el, i) => {
+                                if (el.type === 'checkbox' && indexSet.has(i)) {
+                                    el.dispatchEvent(new Event('change', { bubbles: true }));
                                 }
                             });
                             break;

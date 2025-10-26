@@ -18,6 +18,9 @@ const configListeners = new Set();
 // Current configuration
 let currentConfig = { ...DEFAULT_CONFIG };
 
+// Helper: detect userscript storage functions
+const hasGM = (typeof GM_getValue === 'function' && typeof GM_setValue === 'function');
+
 /**
  * Configuration store for managing GPT and application settings
  */
@@ -28,11 +31,31 @@ class ConfigStore {
      */
     async load() {
         try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const storedConfig = JSON.parse(stored);
-                currentConfig = { ...DEFAULT_CONFIG, ...storedConfig };
+            let stored = null;
+            if (hasGM) {
+                try {
+                    stored = GM_getValue(STORAGE_KEY, null);
+                } catch (e) {
+                    // GM_getValue may throw in some environments; fall back
+                    stored = null;
+                }
+            } else if (typeof localStorage !== 'undefined') {
+                stored = localStorage.getItem(STORAGE_KEY);
             }
+
+            if (stored) {
+                let storedConfig = stored;
+                // GM storage may already return an object, or a JSON string
+                if (typeof stored === 'string') {
+                    try { storedConfig = JSON.parse(stored); } catch(e) { /* keep string */ }
+                }
+                if (typeof storedConfig === 'object') {
+                    currentConfig = { ...DEFAULT_CONFIG, ...storedConfig };
+                }
+            }
+
+            // Notify listeners of loaded config
+            this.notifyListeners();
             return this.getConfig();
         } catch (error) {
             console.error('Failed to load configuration:', error);
@@ -45,7 +68,17 @@ class ConfigStore {
      */
     save() {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+            if (hasGM) {
+                try {
+                    // GM_setValue can store objects in many runtimes, but stringify for safety
+                    GM_setValue(STORAGE_KEY, JSON.stringify(currentConfig));
+                } catch (e) {
+                    // fallback: try to set directly
+                    try { GM_setValue(STORAGE_KEY, currentConfig); } catch (e2) { /* ignore */ }
+                }
+            } else if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(currentConfig));
+            }
         } catch (error) {
             console.error('Failed to save configuration:', error);
         }
@@ -119,4 +152,12 @@ class ConfigStore {
 
 // Export singleton instance
 const configStore = new ConfigStore();
+// Attempt to load saved configuration immediately so other pages/scripts can read it
+configStore.load().then(cfg => {
+    try {
+        // Lightweight debug log to help verify cross-page loading (can be removed later)
+        if (typeof console !== 'undefined') console.debug('ConfigStore loaded config:', cfg);
+    } catch (e) {}
+}).catch(()=>{});
+
 module.exports = configStore;

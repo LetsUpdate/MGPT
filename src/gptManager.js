@@ -92,7 +92,7 @@ class GPTManager {
         
         if (possibleAnswer && possibleAnswer.length > 0) {
             fullPrompt += "\n\nPossible answers:\n" + 
-                possibleAnswer.map((ans, idx) => `${idx + 1}. ${ans}`).join('\n');
+                possibleAnswer.map((ans, idx) => `index:${idx}, ${ans}`).join('\n');
         }
 
         return new Promise((resolve, reject) => {
