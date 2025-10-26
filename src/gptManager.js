@@ -47,6 +47,8 @@ class GPTManager {
         }
     }
 
+
+    //todo: gpt-o1 only writes the indexes of the question, not the answers, we shoud handle that in multiple choice questions
     /**
      * Sends a question to GPT and gets the response
      * @param {string} question - The question to ask
@@ -94,6 +96,91 @@ class GPTManager {
         }
 
         return new Promise((resolve, reject) => {
+// config based on model
+
+            // Clean up options by removing any message/prompt fields the caller may have passed
+            const cleanOptions = { ...options };
+            delete cleanOptions.messages;
+            delete cleanOptions.prompt;
+
+            // Decide whether to send 'messages' (chat completions endpoint) or 'prompt' (completion-like endpoints).
+            // The configured API URL in `scriptConfig.API_URL` usually indicates which format is expected.
+            const useMessages = typeof scriptConfig.API_URL === 'string' && scriptConfig.API_URL.includes('/chat');
+
+            // Build request body depending on endpoint expectations, not only on model name
+            let requestBody = { model: config.model };
+
+            if (useMessages) {
+                // Some completion-style models (for example: 'o1-mini', 'ai-mini', other '-mini' models)
+                // do not support the 'system' role. Detect common mini/completion models and
+                // if detected, send a single 'user' message that contains the system prompt + prompt.
+                const modelName = String(config.model || '').toLowerCase();
+                const modelDisallowsSystem = /mini|^o1|^o4/.test(modelName);
+
+                if (modelDisallowsSystem) {
+                    requestBody.messages = [
+                        {
+                            role: 'user',
+                            content: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]\n\n` + fullPrompt
+                        }
+                    ];
+                } else {
+                    requestBody.messages = [
+                        {
+                            role: 'system',
+                            content: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]`
+                        },
+                        {
+                            role: 'user',
+                            content: fullPrompt
+                        }
+                    ];
+                }
+                // Merge any remaining clean options
+                requestBody = { ...requestBody, ...cleanOptions };
+            } else {
+                // For non-chat endpoints (completions / responses) use a single prompt field
+                requestBody = {
+                    ...requestBody,
+                    prompt: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]\n\n` + fullPrompt,
+                    max_tokens: 150,
+                    temperature: 0.7,
+                    ...cleanOptions
+                };
+            }
+
+            // Normalize request body to match endpoint expectations.
+            // If endpoint expects messages (chat) but we have a prompt, convert it.
+            if (useMessages && requestBody.prompt && !requestBody.messages) {
+                // Split prompt into system part and user part if possible
+                requestBody.messages = [
+                    {
+                        role: 'system',
+                        content: scriptConfig.SYSTEM_PROMPT
+                    },
+                    {
+                        role: 'user',
+                        content: requestBody.prompt
+                    }
+                ];
+                delete requestBody.prompt;
+            }
+
+            // If endpoint expects prompt but we have messages, convert messages -> prompt
+            if (!useMessages && requestBody.messages && !requestBody.prompt) {
+                // Concatenate system + user message content into a single prompt
+                const parts = [];
+                for (const msg of requestBody.messages) {
+                    if (msg.content) parts.push(msg.content);
+                }
+                requestBody.prompt = parts.join('\n\n');
+                delete requestBody.messages;
+            }
+
+            const data = JSON.stringify(requestBody);
+            
+       
+            
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: scriptConfig.API_URL,
@@ -101,20 +188,7 @@ class GPTManager {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${config.apiKey}`
                 },
-                data: JSON.stringify({
-                    model: config.model,
-                    messages: [
-                        { 
-                            role: "system", 
-                            content: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]`
-                        },
-                        { 
-                            role: "user", 
-                            content: fullPrompt 
-                        }
-                    ],
-                    ...options
-                }),
+                data: data,
                 onload: (response) => {
                     try {
                         if (response.status !== 200) {
@@ -122,7 +196,9 @@ class GPTManager {
                         }
 
                         const data = JSON.parse(response.responseText);
-                        const answer = data.choices[0].message.content;
+                        const answer = data.choices && data.choices[0] ? 
+                            (data.choices[0].text || data.choices[0].message?.content || '') : 
+                            '';
                         
                         try {
                             // Try to parse the response as JSON

@@ -6,8 +6,6 @@ const {gptManager, AnswerType} = require('./gptManager');
 class QuestionSolver {
     constructor() {
 
-        print(AnswerType.CHECKBOX);
-
         // DOM selector configurations
         this.selectors = {
             questionNode: {
@@ -479,6 +477,37 @@ class QuestionSolver {
                         questionData.data.type
                     );
                     console.log('GPT Response:', gptResponse);
+
+                    switch (questionData.data.type) {
+                        case AnswerType.TEXT:
+                            const textAnswer = gptResponse.correctAnswers || '';
+                            if (questionData.elements.answerElements[0]) {
+                                questionData.elements.answerElements[0].value = textAnswer;
+                            }
+                            break;
+
+                        case AnswerType.RADIO:
+                            const radioAnswer = gptResponse.correctAnswers[0] || '';
+                            questionData.data.answers.forEach(ans => {
+                                if (ans.text.toLowerCase() === radioAnswer.toLowerCase()) {
+                                    //click on element
+                                    ans.element.checked = true;
+                                }
+                            });
+                            break;
+
+                        case AnswerType.CHECKBOX:
+                            const checkboxAnswers = gptResponse.correctAnswers || [];
+                            questionData.data.answers.forEach(ans => {
+                                if (checkboxAnswers.map(a => a.toLowerCase()).includes(ans.text.toLowerCase())) {
+                                    ans.element.checked = true;
+                                }
+                            });
+                            break;
+
+                        default:
+                            console.warn('Unhandled question type for GPT response application:', questionData.data.type);
+                    }
                     // Here you can apply the GPT response to the UI as needed
                 } catch (error) {
                     console.error('Error getting GPT answer:', error);
