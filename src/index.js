@@ -4,27 +4,12 @@ const {PlaceLogo} = require('./UImodul');
  */
 const configPanel = require("./configPanel");
 const configStore = require("./configStore");
+const questionSolver = require("./questionSolver");
+const solverPanel = require("./solverPanel");
 
 
 (function () {
     'use strict';
-
-/*     if (utils.isNeptunPage() && utils.isLoginPage()) {
-        // Set up a Mutation Observer to watch for changes in the DOM
-
-        //Prevent npu to press login after the user too
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter') {
-                const $abortLoginLink = $('#abortLogin > a');
-                if ($abortLoginLink.length) {
-                    $abortLoginLink[0].click();
-                }
-            }
-        });
-        console.log("LookForCaptcha");
-        PlaceLogo();
-        LookForCaptcha();
-    } */
 
     // Initialize the application
     const init = async () => {
@@ -35,7 +20,9 @@ const configStore = require("./configStore");
             // Then initialize the config panel
             configPanel.init();
 
-            // Additional initialization can be added here
+            // Initialize the solver panel
+            questionSolver.init();
+
             console.log('MoodleGPT initialized successfully');
         } catch (error) {
             console.error('Failed to initialize MoodleGPT:', error);
