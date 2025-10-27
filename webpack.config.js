@@ -81,6 +81,11 @@ module.exports = {
                                     'GM_openInTab',
                                     'unsafeWindow'
                                 ],
+                                // Allow cross-domain requests to local RAG server
+                                connect: [
+                                    'localhost',
+                                    '127.0.0.1'
+                                ],
                                 "run-at": "document-start",
                                 require: "https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js",
                                 updateURL: "https://github.com/LetsUpdate/MGPT/releases/latest/download/MGPT.meta.js",

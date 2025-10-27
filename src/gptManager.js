@@ -1,6 +1,7 @@
 // GPT Manager for handling GPT interactions and configurations
 const configStore = require('./configStore');
 const scriptConfig = require('./config');
+const ragClient = require('./ragClient');
 
 
 // Global GPT manager instance
@@ -77,8 +78,24 @@ class GPTManager {
             throw new Error('Possible answers must be provided for non-text answer types');
         }
 
+        // Optionally retrieve RAG context
+        let contextPrefix = '';
+        try {
+            const cfg = configStore.getConfig();
+            if (cfg.ragEnabled) {
+                const topK = Number(cfg.ragTopK || 5);
+                const { contexts } = await ragClient.query(question, topK);
+                if (contexts && contexts.length) {
+                    const ctxText = contexts.map((c, i) => `[[Chunk ${i+1} | score=${(c.score ?? 0).toFixed(3)}]]\n${c.text}`).join('\n\n');
+                    contextPrefix = `Relevant knowledge (from your local corpus):\n${ctxText}\n\n`;
+                }
+            }
+        } catch (e) {
+            console.warn('RAG retrieval failed or disabled:', e?.message || e);
+        }
+
         // Construct the prompt with question type, question and possible answers
-        let fullPrompt = `Question Type: [${answerType.toUpperCase()}]\n\n${question}`;
+        let fullPrompt = `${contextPrefix}Question Type: [${answerType.toUpperCase()}]\n\n${question}`;
         
         // Add answer format instruction based on type
         const typeInstructions = {

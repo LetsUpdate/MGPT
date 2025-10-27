@@ -9,6 +9,10 @@ const DEFAULT_CONFIG = {
     apiUrl: 'https://api.openai.com/v1/chat/completions',
     temperature: 0.7,
     maxTokens: 2000,
+    // RAG settings
+    ragServerUrl: 'http://localhost:7860',
+    ragTopK: 5,
+    ragEnabled: true,
     isConfigured: false
 };
 
