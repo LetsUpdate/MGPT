@@ -118,6 +118,21 @@ const ConfigPanel = (() => {
           <small>Amint a GPT válaszol, a válasz(ok) automatikusan a vágólapra kerülnek.</small>
         </div>
         <div class="gpt-config-field">
+          <label for="ragEnabled">RAG szerver engedélyezése:</label>
+          <input type="checkbox" id="ragEnabled" ${currentConfig.ragEnabled ? 'checked' : ''}>
+          <small>Ki/bekapcsolja a RAG szervert a válaszok javításához.</small>
+        </div>
+        <div class="gpt-config-field">
+          <label for="ragServerUrl">RAG szerver URL:</label>
+          <input type="text" id="ragServerUrl" value="${currentConfig.ragServerUrl || 'http://localhost:7860'}">
+          <small>A RAG szerver címe (alapértelmezett: http://localhost:7860).</small>
+        </div>
+        <div class="gpt-config-field">
+          <label for="ragTopK">RAG Top-K eredmények:</label>
+          <input type="number" id="ragTopK" min="1" max="20" step="1" value="${currentConfig.ragTopK || 5}">
+          <small>Hány releváns dokumentumrészletet kérjen le (alapértelmezett: 5).</small>
+        </div>
+        <div class="gpt-config-field">
           <label for="ragQueryOptimizeEnabled">RAG lekérdezés optimalizálás:</label>
           <input type="checkbox" id="ragQueryOptimizeEnabled" ${currentConfig.ragQueryOptimizeEnabled ? 'checked' : ''}>
           <small>Gyors GPT-vel rövidíti/tömöríti a kérdést a RAG számára.</small>
@@ -280,15 +295,21 @@ const ConfigPanel = (() => {
     const modelSelect = panelElement.querySelector('#model');
     const apiUrlInput = panelElement.querySelector('#apiUrl');
     const copyResultsInput = panelElement.querySelector('#copyResoults');
-  const ragOptInput = panelElement.querySelector('#ragQueryOptimizeEnabled');
-  const ragMaxCharsInput = panelElement.querySelector('#ragQueryMaxChars');
+    const ragEnabledInput = panelElement.querySelector('#ragEnabled');
+    const ragServerUrlInput = panelElement.querySelector('#ragServerUrl');
+    const ragTopKInput = panelElement.querySelector('#ragTopK');
+    const ragOptInput = panelElement.querySelector('#ragQueryOptimizeEnabled');
+    const ragMaxCharsInput = panelElement.querySelector('#ragQueryMaxChars');
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
     if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
     if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
-  if (ragOptInput) ragOptInput.checked = Boolean(config.ragQueryOptimizeEnabled);
-  if (ragMaxCharsInput) ragMaxCharsInput.value = Number(config.ragQueryMaxChars || 160);
+    if (ragEnabledInput) ragEnabledInput.checked = Boolean(config.ragEnabled);
+    if (ragServerUrlInput) ragServerUrlInput.value = config.ragServerUrl || 'http://localhost:7860';
+    if (ragTopKInput) ragTopKInput.value = Number(config.ragTopK || 5);
+    if (ragOptInput) ragOptInput.checked = Boolean(config.ragQueryOptimizeEnabled);
+    if (ragMaxCharsInput) ragMaxCharsInput.value = Number(config.ragQueryMaxChars || 160);
   };
 
   // Validate API key
@@ -302,8 +323,11 @@ const ConfigPanel = (() => {
     const model = panelElement.querySelector('#model').value;
     const apiUrl = panelElement.querySelector('#apiUrl').value;
     const copyResoults = panelElement.querySelector('#copyResoults').checked;
-  const ragQueryOptimizeEnabled = panelElement.querySelector('#ragQueryOptimizeEnabled').checked;
-  const ragQueryMaxChars = Number(panelElement.querySelector('#ragQueryMaxChars').value || 160);
+    const ragEnabled = panelElement.querySelector('#ragEnabled').checked;
+    const ragServerUrl = panelElement.querySelector('#ragServerUrl').value;
+    const ragTopK = Number(panelElement.querySelector('#ragTopK').value || 5);
+    const ragQueryOptimizeEnabled = panelElement.querySelector('#ragQueryOptimizeEnabled').checked;
+    const ragQueryMaxChars = Number(panelElement.querySelector('#ragQueryMaxChars').value || 160);
 
     // Only set isConfigured to true if API key is valid
     if (!isValidApiKey(apiKey)) {
@@ -316,6 +340,9 @@ const ConfigPanel = (() => {
       model,
       apiUrl,
       copyResoults,
+      ragEnabled,
+      ragServerUrl,
+      ragTopK,
       ragQueryOptimizeEnabled,
       ragQueryMaxChars,
       isConfigured: true
