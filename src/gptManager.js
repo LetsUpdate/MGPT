@@ -64,7 +64,7 @@ class GPTManager {
         }
 
         const config = configStore.getConfig();
-        if (!config.apiKey) {
+        if (!config.apiKey && !options.apiKey) {
             throw new Error('GPT API key not configured');
         }
 
@@ -95,7 +95,7 @@ class GPTManager {
         }
 
         // Construct the prompt with question type, question and possible answers
-        let fullPrompt = `${contextPrefix}Question Type: [${answerType.toUpperCase()}]\n\n${question}`;
+    let fullPrompt = `${contextPrefix}Question Type: [${answerType.toUpperCase()}]\n\n${question}`;
         
         // Add answer format instruction based on type
         const typeInstructions = {
@@ -119,13 +119,19 @@ class GPTManager {
             const cleanOptions = { ...options };
             delete cleanOptions.messages;
             delete cleanOptions.prompt;
+            // Extract optional overrides
+            const apiKeyOverride = options.apiKey;
+            const apiUrlOverride = options.apiUrl;
+            const modelOverride = options.model;
 
             // Decide whether to send 'messages' (chat completions endpoint) or 'prompt' (completion-like endpoints).
             // The configured API URL in `scriptConfig.API_URL` usually indicates which format is expected.
-            const useMessages = typeof scriptConfig.API_URL === 'string' && scriptConfig.API_URL.includes('/chat');
+            // Decide endpoint URL (prefer override -> config -> script default)
+            const endpointUrl = (apiUrlOverride || config.apiUrl || scriptConfig.API_URL);
+            const useMessages = typeof endpointUrl === 'string' && endpointUrl.includes('/chat');
 
             // Build request body depending on endpoint expectations, not only on model name
-            let requestBody = { model: config.model };
+            let requestBody = { model: (modelOverride || config.model) };
 
             if (useMessages) {
                 // Some completion-style models (for example: 'o1-mini', 'ai-mini', other '-mini' models)
@@ -153,7 +159,7 @@ class GPTManager {
                         }
                     ];
                 }
-                // Merge any remaining clean options
+                // Merge any remaining clean options (e.g., max_tokens, temperature)
                 requestBody = { ...requestBody, ...cleanOptions };
             } else {
                 // For non-chat endpoints (completions / responses) use a single prompt field
@@ -200,10 +206,10 @@ class GPTManager {
             
             GM_xmlhttpRequest({
                 method: 'POST',
-                url: scriptConfig.API_URL,
+                url: endpointUrl,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${config.apiKey}`
+                    'Authorization': `Bearer ${apiKeyOverride || config.apiKey}`
                 },
                 data: data,
                 onload: (response) => {

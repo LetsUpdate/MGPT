@@ -112,7 +112,13 @@ const ConfigPanel = (() => {
           <label for="apiUrl">API URL:</label>
           <input type="text" id="apiUrl" value="${currentConfig.apiUrl}">
         </div>
+        <div class="gpt-config-field">
+          <label for="copyResoults">Másolat vágólapra (copyResoults):</label>
+          <input type="checkbox" id="copyResoults" ${currentConfig.copyResoults ? 'checked' : ''}>
+          <small>Amint a GPT válaszol, a válasz(ok) automatikusan a vágólapra kerülnek.</small>
+        </div>
         <button class="gpt-config-save">Save Settings</button>
+        <button class="gpt-config-test">Test Settings</button>
       </div>
     `;
 
@@ -209,6 +215,7 @@ const ConfigPanel = (() => {
     document.addEventListener('keydown', handleKeyPress);
     panelElement.querySelector('.gpt-config-close').addEventListener('click', hide);
     panelElement.querySelector('.gpt-config-save').addEventListener('click', saveSettings);
+  panelElement.querySelector('.gpt-config-test').addEventListener('click', testSettings);
 
     const currentConfig = configStore.getConfig();
     // Show panel on first launch if not configured
@@ -261,10 +268,12 @@ const ConfigPanel = (() => {
     const apiKeyInput = panelElement.querySelector('#apiKey');
     const modelSelect = panelElement.querySelector('#model');
     const apiUrlInput = panelElement.querySelector('#apiUrl');
+    const copyResultsInput = panelElement.querySelector('#copyResoults');
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
     if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
+    if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
   };
 
   // Validate API key
@@ -277,6 +286,7 @@ const ConfigPanel = (() => {
     const apiKey = panelElement.querySelector('#apiKey').value;
     const model = panelElement.querySelector('#model').value;
     const apiUrl = panelElement.querySelector('#apiUrl').value;
+    const copyResoults = panelElement.querySelector('#copyResoults').checked;
 
     // Only set isConfigured to true if API key is valid
     if (!isValidApiKey(apiKey)) {
@@ -288,11 +298,54 @@ const ConfigPanel = (() => {
       apiKey,
       model,
       apiUrl,
+      copyResoults,
       isConfigured: true
     };
 
     configStore.update(newConfig);
     hide();
+  };
+
+  // Perform a test GPT request with the currently entered values (without requiring save)
+  const testSettings = async () => {
+    const apiKey = panelElement.querySelector('#apiKey').value;
+    const model = panelElement.querySelector('#model').value;
+    const apiUrl = panelElement.querySelector('#apiUrl').value;
+
+    // Allow testing with shorter keys when using custom/self-hosted endpoints
+    const isOpenAI = /api\.openai\.com/.test(apiUrl);
+    if (isOpenAI && !isValidApiKey(apiKey)) {
+      alert('Please enter a valid API key first.');
+      return;
+    }
+
+    // Lazy require to avoid circular deps on module load
+    const { gptManager, AnswerType } = require('./gptManager');
+
+    try {
+      const testBtn = panelElement.querySelector('.gpt-config-test');
+      if (testBtn) { testBtn.disabled = true; testBtn.textContent = 'Testing…'; }
+      // Minimal quick test: simple text prompt
+      const resp = await gptManager.askGPT(
+        'This is a connectivity test. Reply with {"type":"text","answer":"OK"}.',
+        [],
+        AnswerType.TEXT,
+      );
+
+      // Accept either strict OK or any non-empty answer as success
+      const got = (typeof resp?.answer === 'string' ? resp.answer : (Array.isArray(resp?.correctAnswers) ? resp.correctAnswers.join(',') : ''));
+      if (String(got || '').length > 0) {
+        alert('GPT test succeeded. Response: ' + got.substring(0, 200));
+      } else {
+        alert('GPT test completed but response was empty. Please verify your settings.');
+      }
+    } catch (e) {
+      console.error('Test request failed:', e);
+      alert('GPT test failed: ' + (e?.message || e));
+    } finally {
+      const testBtn = panelElement.querySelector('.gpt-config-test');
+      if (testBtn) { testBtn.disabled = false; testBtn.textContent = 'Test Settings'; }
+    }
   };
 
   // Public API

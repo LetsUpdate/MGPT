@@ -69,6 +69,7 @@ module.exports = {
                                     'https://moodle.ch.bme.hu/*',
                                     'https://kmooc.uni-obuda.hu/*',
                                     'https://old.main.elearning.uni-obuda.hu/*',
+                                    'https://llm.elearning.uni-obuda.hu/*'
                                 ],
                                 noframes: true,
                                 grant: [
@@ -78,13 +79,20 @@ module.exports = {
                                     'GM_setValue',
                                     'GM_deleteValue',
                                     'GM_xmlhttpRequest',
+                                    'GM_setClipboard',
                                     'GM_openInTab',
                                     'unsafeWindow'
                                 ],
                                 // Allow cross-domain requests to local RAG server
                                 connect: [
+                                    // Local tools
                                     'localhost',
-                                    '127.0.0.1'
+                                    '127.0.0.1',
+                                    // Common API hosts used by this script
+                                    'api.openai.com',
+                                    'llm.elearning.uni-obuda.hu',
+                                    // Fallback: allow any host (Tampermonkey only)
+                                    '*'
                                 ],
                                 "run-at": "document-start",
                                 require: "https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js",

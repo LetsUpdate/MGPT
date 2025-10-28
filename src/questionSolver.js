@@ -1,10 +1,13 @@
 // Question Solver Module
 //const gptManager = require('./gptManager');
 const {gptManager, AnswerType} = require('./gptManager');
+const configStore = require('./configStore');
 
 
 class QuestionSolver {
     constructor() {
+        // Avoid concurrent GPT requests
+        this.isRequestInFlight = false;
 
         // DOM selector configurations
         this.selectors = {
@@ -463,6 +466,12 @@ class QuestionSolver {
             // Add click event listener to the question element
             questionData.elements.questionElement.addEventListener('click', async () => {
                 try {
+                    if (this.isRequestInFlight) {
+                        console.warn('A request is already in progress. Please wait.');
+                        return;
+                    }
+                    this.isRequestInFlight = true;
+                    this.setQuestionBusy(questionData.elements.parentNode, true);
                     console.log('Question clicked:', questionData.data.question);
                     const gptResponse = await gptManager.askGPT(
                         questionData.data.question,
@@ -470,6 +479,20 @@ class QuestionSolver {
                         questionData.data.type
                     );
                     console.log('GPT Response:', gptResponse);
+
+                    // Copy results to clipboard immediately if enabled in config
+                    try {
+                        const cfg = configStore.getConfig();
+                        if (cfg && cfg.copyResoults) {
+                            const toCopy = this.formatAnswersValuesOnly(questionData, gptResponse);
+                            if (toCopy) {
+                                await this.copyToClipboard(toCopy);
+                                console.debug('Answers copied to clipboard.');
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Failed to copy answers to clipboard:', e);
+                    }
 
                     const elems = questionData.elements.answerElements || [];
                     const answersData = questionData.data.answers || [];
@@ -488,7 +511,9 @@ class QuestionSolver {
 
                     switch (questionData.data.type) {
                         case AnswerType.TEXT:
-                            const textAnswer = gptResponse.correctAnswers || '';
+                            const textAnswer = (typeof gptResponse?.correctAnswers === 'string')
+                                ? gptResponse.correctAnswers
+                                : (Array.isArray(gptResponse?.correctAnswers) ? gptResponse.correctAnswers[0] : (gptResponse?.answer || ''));
                             if (questionData.elements.answerElements[0]) {
                                 questionData.elements.answerElements[0].value = textAnswer;
                             }
@@ -532,12 +557,187 @@ class QuestionSolver {
                     // Here you can apply the GPT response to the UI as needed
                 } catch (error) {
                     console.error('Error getting GPT answer:', error);
+                } finally {
+                    this.setQuestionBusy(questionData.elements.parentNode, false);
+                    this.markQuestionCompleted(questionData.elements.parentNode);
+                    this.isRequestInFlight = false;
                 }
             });
             console.log('Click listener added to question:', questionData.data.question);
         } else {
             console.error('Question element not found in:', questionData);
         }
+    }
+
+    /**
+     * Formats GPT response into a clipboard-friendly string.
+     * @param {Object} questionData - Processed question data with answers array
+     * @param {Object} gptResponse - Response object returned from gptManager.askGPT
+     * @returns {string}
+     */
+    formatAnswersForClipboard(questionData, gptResponse) {
+        try {
+            const q = questionData?.data?.question || '';
+            const type = questionData?.data?.type || gptResponse?.type || 'unknown';
+            const answersMeta = questionData?.data?.answers || [];
+
+            // Normalize answers to an array of strings
+            let answers = [];
+            if (type === AnswerType.TEXT) {
+                const txt = (typeof gptResponse?.correctAnswers === 'string')
+                    ? gptResponse.correctAnswers
+                    : (Array.isArray(gptResponse?.correctAnswers) ? gptResponse.correctAnswers[0] : (gptResponse?.answer || ''));
+                answers = [String(txt || '').trim()];
+            } else {
+                // For non-text, prefer correctAnswers; could be indices or texts
+                const provided = Array.isArray(gptResponse?.correctAnswers)
+                    ? gptResponse.correctAnswers
+                    : (gptResponse?.correctAnswers != null ? [gptResponse.correctAnswers] : []);
+
+                const toIndex = (ans) => {
+                    if (ans == null) return -1;
+                    if (!isNaN(ans)) {
+                        const idx = parseInt(ans, 10);
+                        return (idx >= 0 && idx < answersMeta.length) ? idx : -1;
+                    }
+                    const lower = String(ans).trim().toLowerCase();
+                    return answersMeta.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+                };
+
+                const indices = provided.map(toIndex).filter(i => i >= 0 && i < answersMeta.length);
+                if (indices.length > 0) {
+                    answers = indices.map(i => String(answersMeta[i]?.text || '').trim());
+                } else {
+                    // Fall back to stringifying provided answers
+                    answers = provided.map(a => String(a));
+                }
+            }
+
+            const header = `Question: ${q}`;
+            const typeLine = `Type: ${type}`;
+            const lines = answers.length ? answers : ['<no answer>'];
+            return [header, typeLine, 'Answers:', ...lines].join('\n');
+        } catch (e) {
+            try {
+                return String(gptResponse?.answer || gptResponse?.correctAnswers || '');
+            } catch { return ''; }
+        }
+    }
+
+    /**
+     * Copies text to clipboard using GM_setClipboard if available, otherwise navigator.clipboard,
+     * and finally a hidden textarea fallback.
+     * @param {string} text
+     */
+    async copyToClipboard(text) {
+        if (!text) return;
+        try {
+            if (typeof GM_setClipboard === 'function') {
+                GM_setClipboard(text, 'text');
+                return;
+            }
+        } catch {}
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch {}
+        }
+
+        // Fallback: hidden textarea
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            ta.style.pointerEvents = 'none';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        } catch (e) {
+            console.warn('Clipboard fallback failed:', e);
+        }
+    }
+
+    /**
+     * Returns only the answer value(s) as a string for clipboard.
+     * - TEXT: single line (answer)
+     * - RADIO: single line (selected answer text)
+     * - CHECKBOX/SELECT: newline separated or comma separated list
+     */
+    formatAnswersValuesOnly(questionData, gptResponse) {
+        const type = questionData?.data?.type || gptResponse?.type || 'unknown';
+        const answersMeta = questionData?.data?.answers || [];
+
+        if (type === AnswerType.TEXT) {
+            const txt = (typeof gptResponse?.correctAnswers === 'string')
+                ? gptResponse.correctAnswers
+                : (Array.isArray(gptResponse?.correctAnswers) ? gptResponse.correctAnswers[0] : (gptResponse?.answer || ''));
+            return String(txt || '').trim();
+        }
+
+        const provided = Array.isArray(gptResponse?.correctAnswers)
+            ? gptResponse.correctAnswers
+            : (gptResponse?.correctAnswers != null ? [gptResponse.correctAnswers] : []);
+
+        const toIndex = (ans) => {
+            if (ans == null) return -1;
+            if (!isNaN(ans)) {
+                const idx = parseInt(ans, 10);
+                return (idx >= 0 && idx < answersMeta.length) ? idx : -1;
+            }
+            const lower = String(ans).trim().toLowerCase();
+            return answersMeta.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+        };
+
+        const indices = provided.map(toIndex).filter(i => i >= 0 && i < answersMeta.length);
+        if (indices.length > 0) {
+            const values = indices.map(i => String(answersMeta[i]?.text || '').trim()).filter(Boolean);
+            return values.join(type === AnswerType.CHECKBOX || type === AnswerType.SELECT ? '\n' : ', ');
+        }
+
+        // Fallback to provided as strings
+        const str = provided.map(a => String(a)).filter(Boolean).join('\n');
+        return str || '';
+    }
+
+    /**
+     * Adds/removes a subtle busy indicator on the question node.
+     */
+    setQuestionBusy(questionNode, busy) {
+        if (!questionNode) return;
+        try {
+            questionNode.classList.toggle('mgpt-busy', !!busy);
+            if (busy) {
+                if (!document.getElementById('mgpt-style')) {
+                    const s = document.createElement('style');
+                    s.id = 'mgpt-style';
+                    s.textContent = `
+                        /* Subtle visual feedback */
+                        .mgpt-busy { outline: 1px dashed rgba(136,136,136,0.28); outline-offset: 1px; }
+                        .mgpt-done { outline: 1px solid rgba(46,204,113,0.35); outline-offset: 1px; animation: mgptPulse 0.6s ease-out 1; }
+                        @keyframes mgptPulse { from { box-shadow: 0 0 0 0 rgba(46,204,113,0.18); } to { box-shadow: 0 0 0 4px rgba(46,204,113,0); } }
+                    `;
+                    document.head.appendChild(s);
+                }
+            }
+        } catch {}
+    }
+
+    /**
+     * Marks a question as completed briefly.
+     */
+    markQuestionCompleted(questionNode) {
+        if (!questionNode) return;
+        try {
+            questionNode.classList.remove('mgpt-busy');
+            questionNode.classList.add('mgpt-done');
+            setTimeout(() => questionNode.classList.remove('mgpt-done'), 1400);
+        } catch {}
     }
 }
 
