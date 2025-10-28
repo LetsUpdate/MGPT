@@ -16,3 +16,9 @@ Telepítési útmutató:
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q0O1LDA) 
 
 koszi :P
+
+## Hogyan használd?
+
+Részletes lépésről-lépésre útmutató (menü, vágólap, API kulcs beszerzése, fejlesztői RAG szerver indítása):(gpt generated)
+
+- Lásd: [docs/HOWTO.md](docs/HOWTO.md)
