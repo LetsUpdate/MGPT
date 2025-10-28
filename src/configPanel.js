@@ -117,8 +117,18 @@ const ConfigPanel = (() => {
           <input type="checkbox" id="copyResoults" ${currentConfig.copyResoults ? 'checked' : ''}>
           <small>Amint a GPT válaszol, a válasz(ok) automatikusan a vágólapra kerülnek.</small>
         </div>
+        <div class="gpt-config-field">
+          <label for="ragQueryOptimizeEnabled">RAG lekérdezés optimalizálás:</label>
+          <input type="checkbox" id="ragQueryOptimizeEnabled" ${currentConfig.ragQueryOptimizeEnabled ? 'checked' : ''}>
+          <small>Gyors GPT-vel rövidíti/tömöríti a kérdést a RAG számára.</small>
+        </div>
+        <div class="gpt-config-field">
+          <label for="ragQueryMaxChars">RAG max karakterszám (tömörített):</label>
+          <input type="number" id="ragQueryMaxChars" min="40" max="500" step="10" value="${currentConfig.ragQueryMaxChars || 160}">
+        </div>
         <button class="gpt-config-save">Save Settings</button>
         <button class="gpt-config-test">Test Settings</button>
+        <button class="gpt-config-test-text">Quick Text Test</button>
       </div>
     `;
 
@@ -215,7 +225,8 @@ const ConfigPanel = (() => {
     document.addEventListener('keydown', handleKeyPress);
     panelElement.querySelector('.gpt-config-close').addEventListener('click', hide);
     panelElement.querySelector('.gpt-config-save').addEventListener('click', saveSettings);
-  panelElement.querySelector('.gpt-config-test').addEventListener('click', testSettings);
+    panelElement.querySelector('.gpt-config-test').addEventListener('click', testSettings);
+    panelElement.querySelector('.gpt-config-test-text').addEventListener('click', testTextQuestion);
 
     const currentConfig = configStore.getConfig();
     // Show panel on first launch if not configured
@@ -269,11 +280,15 @@ const ConfigPanel = (() => {
     const modelSelect = panelElement.querySelector('#model');
     const apiUrlInput = panelElement.querySelector('#apiUrl');
     const copyResultsInput = panelElement.querySelector('#copyResoults');
+  const ragOptInput = panelElement.querySelector('#ragQueryOptimizeEnabled');
+  const ragMaxCharsInput = panelElement.querySelector('#ragQueryMaxChars');
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
     if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
     if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
+  if (ragOptInput) ragOptInput.checked = Boolean(config.ragQueryOptimizeEnabled);
+  if (ragMaxCharsInput) ragMaxCharsInput.value = Number(config.ragQueryMaxChars || 160);
   };
 
   // Validate API key
@@ -287,6 +302,8 @@ const ConfigPanel = (() => {
     const model = panelElement.querySelector('#model').value;
     const apiUrl = panelElement.querySelector('#apiUrl').value;
     const copyResoults = panelElement.querySelector('#copyResoults').checked;
+  const ragQueryOptimizeEnabled = panelElement.querySelector('#ragQueryOptimizeEnabled').checked;
+  const ragQueryMaxChars = Number(panelElement.querySelector('#ragQueryMaxChars').value || 160);
 
     // Only set isConfigured to true if API key is valid
     if (!isValidApiKey(apiKey)) {
@@ -299,6 +316,8 @@ const ConfigPanel = (() => {
       model,
       apiUrl,
       copyResoults,
+      ragQueryOptimizeEnabled,
+      ragQueryMaxChars,
       isConfigured: true
     };
 
@@ -330,6 +349,7 @@ const ConfigPanel = (() => {
         'This is a connectivity test. Reply with {"type":"text","answer":"OK"}.',
         [],
         AnswerType.TEXT,
+        { apiKey, apiUrl, model, max_tokens: 20, temperature: 0 }
       );
 
       // Accept either strict OK or any non-empty answer as success
@@ -345,6 +365,84 @@ const ConfigPanel = (() => {
     } finally {
       const testBtn = panelElement.querySelector('.gpt-config-test');
       if (testBtn) { testBtn.disabled = false; testBtn.textContent = 'Test Settings'; }
+    }
+  };
+
+  function formatAnswersValuesOnly(questionData, gptResponse) {
+    // Prefer response-declared type; default to 'text' for Quick Text Test
+    const rawType = (gptResponse && gptResponse.type) || (questionData && questionData.data && questionData.data.type) || 'text';
+    const type = String(rawType).toLowerCase();
+
+    // For Quick Text Test there is no questionData; handle TEXT robustly
+    if (type === 'text') {
+      const txt = (typeof gptResponse?.correctAnswers === 'string')
+        ? gptResponse.correctAnswers
+        : (Array.isArray(gptResponse?.correctAnswers) ? gptResponse.correctAnswers[0] : (gptResponse?.answer || ''));
+      return String(txt || '').trim();
+    }
+
+    // Multiple-choice formatting (kept for completeness when used elsewhere)
+    const answersMeta = (questionData && questionData.data && Array.isArray(questionData.data.answers)) ? questionData.data.answers : [];
+    const provided = Array.isArray(gptResponse?.correctAnswers)
+      ? gptResponse.correctAnswers
+      : (gptResponse?.correctAnswers != null ? [gptResponse.correctAnswers] : []);
+
+    const toIndex = (ans) => {
+      if (ans == null) return -1;
+      if (!isNaN(ans)) {
+        const idx = parseInt(ans, 10);
+        return (idx >= 0 && idx < answersMeta.length) ? idx : -1;
+      }
+      const lower = String(ans).trim().toLowerCase();
+      return answersMeta.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+    };
+
+    const indices = provided.map(toIndex).filter(i => i >= 0 && i < answersMeta.length);
+    if (indices.length > 0) {
+      const values = indices.map(i => String(answersMeta[i]?.text || '').trim()).filter(Boolean);
+      const multi = (type === 'checkbox' || type === 'select');
+      return values.join(multi ? '\n' : ', ');
+    }
+
+    // Fallback to provided as strings if we cannot map
+    const str = provided.map(a => String(a)).filter(Boolean).join('\n');
+    return str || '';
+  }
+
+  // Ask user for a TEXT question, run it, and show the result in an alert
+  const testTextQuestion = async () => {
+    const apiKey = panelElement.querySelector('#apiKey').value;
+    const model = panelElement.querySelector('#model').value;
+    const apiUrl = panelElement.querySelector('#apiUrl').value;
+
+    const isOpenAI = /api\.openai\.com/.test(apiUrl);
+    if (isOpenAI && !isValidApiKey(apiKey)) {
+      alert('Please enter a valid API key first.');
+      return;
+    }
+
+    const q = prompt('Add meg a kérdést (TEXT típus):');
+    if (!q || !q.trim()) return;
+
+    const { gptManager, AnswerType } = require('./gptManager');
+
+    const btn = panelElement.querySelector('.gpt-config-test-text');
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+      const resp = await gptManager.askGPT(
+        q.trim(),
+        [],
+        AnswerType.TEXT,
+
+      );
+
+      const formatted = formatAnswersValuesOnly(null, resp);
+      alert('Válasz: ' + String(formatted || '').trim());
+    } catch (e) {
+      console.error('Quick Text Test failed:', e);
+      alert('Hiba történt: ' + (e?.message || e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Quick Text Test'; }
     }
   };
 

@@ -29,6 +29,82 @@ class GPTManager {
     }
 
     /**
+     * Optionally rewrites a question into a short, RAG-friendly query.
+     * Falls back to original on error.
+     */
+    async rewriteQuery(originalQuestion, cfg) {
+        try {
+            const maxChars = Math.max(40, Number(cfg.ragQueryMaxChars || 160));
+            const instruction = `Rewrite the following question into a concise search query optimised for semantic retrieval.\n` +
+                `- Keep it under ${maxChars} characters.\n` +
+                `- Use the primary language of the question.\n` +
+                `- Preserve key entities, numbers, and constraints.\n` +
+                `- Output ONLY the single-line query, with no quotes or extra text.`;
+
+            const prompt = `${instruction}\n\nQuestion:\n${originalQuestion}`;
+            const text = await this._sendMinimal(prompt, cfg, { max_tokens: 64, temperature: 0.2 });
+            const oneline = String((text || '').split('\n')[0]).trim();
+            if (!oneline) return originalQuestion;
+            // Hard truncate to maxChars just in case
+            return oneline.length > maxChars ? oneline.slice(0, maxChars) : oneline;
+        } catch (e) {
+            console.warn('rewriteQuery failed, using original question:', e?.message || e);
+            return originalQuestion;
+        }
+    }
+
+    /**
+     * Sends a minimal text request to the configured endpoint and returns raw text content.
+     * This bypasses RAG and the answer-type handling.
+     */
+    async _sendMinimal(userContent, cfg, opts = {}) {
+        const endpointUrl = (cfg.apiUrl || scriptConfig.API_URL);
+        const model = "gpt-4o"//cfg.model;
+        const apiKey = cfg.apiKey;
+        const useMessages = typeof endpointUrl === 'string' && endpointUrl.includes('/chat');
+
+        const baseBody = { model };
+        let requestBody;
+        if (useMessages) {
+            // Avoid system for mini models; send as a single user message
+            const modelName = String(model || '').toLowerCase();
+            const modelDisallowsSystem = /mini|^o1|^o4/.test(modelName);
+            if (modelDisallowsSystem) {
+                requestBody = { ...baseBody, messages: [{ role: 'user', content: userContent }], ...opts };
+            } else {
+                requestBody = { ...baseBody, messages: [
+                    { role: 'system', content: 'You rewrite queries. Output only the final rewritten query.' },
+                    { role: 'user', content: userContent }
+                ], ...opts };
+            }
+        } else {
+            requestBody = { ...baseBody, prompt: userContent, max_tokens: 80, temperature: 0.2, ...opts };
+        }
+
+        const payload = JSON.stringify(requestBody);
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: endpointUrl,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                data: payload,
+                onload: (response) => {
+                    try {
+                        if (response.status !== 200) throw new Error('HTTP ' + response.status);
+                        const body = JSON.parse(response.responseText);
+                        const text = body.choices && body.choices[0] ? (body.choices[0].text || body.choices[0].message?.content || '') : '';
+                        resolve(String(text || ''));
+                    } catch (e) { reject(e); }
+                },
+                onerror: (e) => reject(e)
+            });
+        });
+    }
+
+    /**
      * Initializes the GPT manager
      * @returns {Promise} Resolves when initialization is complete
      */
@@ -84,7 +160,14 @@ class GPTManager {
             const cfg = configStore.getConfig();
             if (cfg.ragEnabled) {
                 const topK = Number(cfg.ragTopK || 5);
-                const { contexts } = await ragClient.query(question, topK);
+                let ragQueryText = question;
+                if (cfg.ragQueryOptimizeEnabled) {
+                    ragQueryText = await this.rewriteQuery(question, cfg);
+                    if (ragQueryText && ragQueryText !== question) {
+                        console.debug('RAG optimized query:', ragQueryText);
+                    }
+                }
+                const { contexts } = await ragClient.query(ragQueryText, topK);
                 if (contexts && contexts.length) {
                     const ctxText = contexts.map((c, i) => `[[Chunk ${i+1} | score=${(c.score ?? 0).toFixed(3)}]]\n${c.text}`).join('\n\n');
                     contextPrefix = `Relevant knowledge (from your local corpus):\n${ctxText}\n\n`;
@@ -111,6 +194,7 @@ class GPTManager {
             fullPrompt += "\n\nPossible answers:\n" + 
                 possibleAnswer.map((ans, idx) => `index:${idx}, ${ans}`).join('\n');
         }
+        console.log('Full Prompt Sent to GPT:', fullPrompt);
 
         return new Promise((resolve, reject) => {
 // config based on model

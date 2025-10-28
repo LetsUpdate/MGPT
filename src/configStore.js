@@ -11,6 +11,9 @@ const DEFAULT_CONFIG = {
     maxTokens: 2000,
     // Clipboard behavior
     copyResoults: false,
+    // RAG query optimization
+    ragQueryOptimizeEnabled: false,
+    ragQueryMaxChars: 160,
     // RAG settings
     ragServerUrl: 'http://localhost:7860',
     ragTopK: 5,
