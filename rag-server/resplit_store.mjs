@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { pipeline } from '@xenova/transformers';
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DATA_DIR = path.resolve(process.cwd(), 'rag-server/data');
 const STORE_FILE = path.join(DATA_DIR, 'store.json');
 
 function chunkText(text, chunkSize = 450, overlap = 80) {

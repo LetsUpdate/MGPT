@@ -5,7 +5,7 @@
   "type": "module",
   "main": "server.mjs",
   "scripts": {
-    "start": "node server.mjss",
+    "start": "node server.mjs",
     "dev": "NODE_ENV=development node server.mjs"
   },
   "dependencies": {
