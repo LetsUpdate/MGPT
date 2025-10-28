@@ -12,7 +12,8 @@ const AnswerType = {
     CHECKBOX: 'checkbox',
     RADIO: 'radio',
     TEXT: 'text',
-    SELECT: 'select'
+    SELECT: 'select',
+    MULTIPLE_TEXT: 'MULTIPLE_TEXT'
 };
 
 
@@ -130,8 +131,9 @@ class GPTManager {
      * Sends a question to GPT and gets the response
      * @param {string} question - The question to ask
      * @param {Array<string>} possibleAnswer - Array of possible answers for multiple choice questions
-     * @param {AnswerType} answerType - Type of answer expected (RADIO, CHECKBOX, SELECT, or TEXT)
+     * @param {AnswerType} answerType - Type of answer expected (RADIO, CHECKBOX, SELECT, TEXT, or MULTIPLE_TEXT)
      * @param {Object} options - Additional options for the request
+     * @param {number} options.answerFieldsCount - Number of answer fields (used for MULTIPLE_TEXT type)
      * @returns {Promise<Object>} The GPT response
      */
     async askGPT(question, possibleAnswer = [], answerType = AnswerType.TEXT, options = {}) {
@@ -144,14 +146,22 @@ class GPTManager {
             throw new Error('GPT API key not configured');
         }
 
+        // Extract answerFieldsCount from options (backward compatible)
+        const answerFieldsCount = Math.max(1, parseInt(options.answerFieldsCount || 1, 10));
+
         // Validate answer type
-        if (!Object.values(AnswerType).includes(answerType)) {
-            throw new Error('Invalid answer type. Must be one of: ' + Object.values(AnswerType).join(', '));
+        if (!Object.values(AnswerType).includes(answerType) && answerType !== 'MULTIPLE_TEXT') {
+            throw new Error('Invalid answer type. Must be one of: ' + Object.values(AnswerType).join(', ') + ', MULTIPLE_TEXT');
         }
 
         // Validate possible answers for non-text types
-        if (answerType !== AnswerType.TEXT && (!possibleAnswer || possibleAnswer.length === 0)) {
+        if (answerType !== AnswerType.TEXT && answerType !== 'MULTIPLE_TEXT' && (!possibleAnswer || possibleAnswer.length === 0)) {
             throw new Error('Possible answers must be provided for non-text answer types');
+        }
+        
+        // Validate answerFieldsCount for MULTIPLE_TEXT
+        if (answerType === 'MULTIPLE_TEXT' && answerFieldsCount < 1) {
+            console.warn('MULTIPLE_TEXT requires answerFieldsCount >= 1, defaulting to 1');
         }
 
         // Optionally retrieve RAG context
@@ -185,7 +195,8 @@ class GPTManager {
             [AnswerType.RADIO]: "Please select exactly ONE correct answer.",
             [AnswerType.CHECKBOX]: "Select ALL correct answers.",
             [AnswerType.SELECT]: "Select ALL applicable answers.",
-            [AnswerType.TEXT]: "Provide a concise text answer."
+            [AnswerType.TEXT]: "Provide a concise text answer.",
+            [AnswerType.MULTIPLE_TEXT]: `This question has ${answerFieldsCount} separate answer fields. Provide ${answerFieldsCount} separate answers in the correctAnswers array, one for each field in order.`
         };
         
         fullPrompt += `\n\nInstruction: ${typeInstructions[answerType]}`;
@@ -194,6 +205,12 @@ class GPTManager {
             fullPrompt += "\n\nPossible answers:\n" + 
                 possibleAnswer.map((ans, idx) => `index:${idx}, ${ans}`).join('\n');
         }
+        
+        // MULTIPLE_TEXT esetén példa formátum megadása
+        if (answerType === AnswerType.MULTIPLE_TEXT) {
+            fullPrompt += `\n\nResponse format example:\n{\n  "type": "MULTIPLE_TEXT",\n  "correctAnswers": ["answer1", "answer2", "answer3", ...]\n}\nProvide exactly ${answerFieldsCount} answers in the array.`;
+        }
+        
         console.log('Full Prompt Sent to GPT:', fullPrompt);
 
         return new Promise((resolve, reject) => {

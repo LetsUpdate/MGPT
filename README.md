@@ -22,3 +22,17 @@ koszi :P
 Részletes lépésről-lépésre útmutató (menü, vágólap, API kulcs beszerzése, fejlesztői RAG szerver indítása):(gpt generated)
 
 - Lásd: [docs/HOWTO.md](docs/HOWTO.md)
+
+## Funkciók
+
+### 🎯 Több Válasz Mező Támogatás (MULTIPLE_TEXT)
+
+A script mostantól automatikusan felismeri, amikor egy kérdéshez **több szöveges válasz mező** tartozik, és strukturáltan, részválaszonként kéri meg a ChatGPT-t a válaszadásra. A válaszok automatikusan kitöltődnek a megfelelő mezőkbe sorrendben.
+
+Részletes leírás: [docs/MULTIPLE_TEXT_FEATURE.md](docs/MULTIPLE_TEXT_FEATURE.md)
+
+### 🤖 RAG (Retrieval-Augmented Generation)
+
+Használj saját tudásbázist a válaszok pontosabbá tételéhez!
+
+Részletes leírás: [docs/RAG.md](docs/RAG.md)

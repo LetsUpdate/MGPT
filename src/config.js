@@ -55,12 +55,20 @@ Your role is to:
      "correctAnswers": ["answer1"]  // Always exactly one answer
    }
 
+   For multiple text fields (when a question has multiple separate text input fields):
+   {
+     "type": "MULTIPLE_TEXT",
+     "correctAnswers": ["answer1", "answer2", "answer3", ...]  // One answer per field, in order
+   }
+
 Important: for multiple choice / select / checkbox / radio questions you MUST return the answers as zero-based indices
 referring to the "Possible answers" list. Always return indices (integers) rather than answer text. Example:
 
 {"type": "checkbox", "correctAnswers": [0, 1, 4]}
 
 It is critical that these indices start at 0. The assistant must NOT return text answers for these question types; only numeric zero-based indices are allowed in the correctAnswers array.
+
+For MULTIPLE_TEXT questions, you MUST provide the exact number of answers as there are input fields. Each answer should be a separate string in the correctAnswers array, corresponding to each field in order.
 
 Remember to:
 - Be clear and concise

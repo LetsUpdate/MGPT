@@ -325,12 +325,14 @@ class QuestionSolver {
      * @returns {Promise<string>} A kérdés típusa
      */
     async getAnswerType(node) {
-        const textAnswer = node.querySelector(this.selectors.questionNode.textAnswer);
+        const textAnswers = node.querySelectorAll(this.selectors.questionNode.textAnswer);
         const multipleChoice = node.querySelectorAll(this.selectors.questionNode.multipleChoice);
         const checkboxes = node.querySelectorAll(this.selectors.questionNode.checkbox);
         const select = node.querySelector(this.selectors.questionNode.select);
 
-        if (textAnswer) return AnswerType.TEXT;
+        // Ha több text input mező van, akkor MULTIPLE_TEXT típust adunk vissza
+        if (textAnswers.length > 1) return AnswerType.MULTIPLE_TEXT;
+        if (textAnswers.length === 1) return AnswerType.TEXT;
         if (multipleChoice.length > 0) return AnswerType.RADIO;
         if (checkboxes.length > 0) return AnswerType.CHECKBOX;
         if (select) return AnswerType.SELECT;
@@ -345,6 +347,11 @@ class QuestionSolver {
      */
     async getAnswerElementsByType(node, type) {
         switch(type) {
+            case AnswerType.MULTIPLE_TEXT:
+                // Több text input mező esetén az összeset visszaadjuk
+                const multipleTextInputs = node.querySelectorAll(this.selectors.questionNode.textAnswer);
+                return Array.from(multipleTextInputs);
+
             case AnswerType.TEXT:
                 const textInput = node.querySelector(this.selectors.questionNode.textAnswer);
                 return textInput ? [textInput] : [];
@@ -473,10 +480,18 @@ class QuestionSolver {
                     this.isRequestInFlight = true;
                     this.setQuestionBusy(questionData.elements.parentNode, true);
                     console.log('Question clicked:', questionData.data.question);
+                    
+                    // Prepare options for askGPT
+                    const askGPTOptions = {};
+                    if (questionData.data.type === AnswerType.MULTIPLE_TEXT) {
+                        askGPTOptions.answerFieldsCount = questionData.elements.answerElements.length;
+                    }
+                    
                     const gptResponse = await gptManager.askGPT(
                         questionData.data.question,
-                        questionData.data.answers.map(ans => ans.text),
-                        questionData.data.type
+                        questionData.data.type === AnswerType.MULTIPLE_TEXT ? [] : questionData.data.answers.map(ans => ans.text),
+                        questionData.data.type,
+                        askGPTOptions
                     );
                     console.log('GPT Response:', gptResponse);
 
@@ -510,6 +525,51 @@ class QuestionSolver {
                     };
 
                     switch (questionData.data.type) {
+                        case AnswerType.MULTIPLE_TEXT:
+                            // Több text input mező esetén
+                            try {
+                                let multipleTextAnswers = [];
+                                
+                                // Null-safe answer extraction
+                                if (gptResponse && Array.isArray(gptResponse.correctAnswers)) {
+                                    multipleTextAnswers = gptResponse.correctAnswers;
+                                } else if (gptResponse && typeof gptResponse.correctAnswers === 'string') {
+                                    // Ha string-ként jött, próbáljuk array-re alakítani
+                                    multipleTextAnswers = [gptResponse.correctAnswers];
+                                } else if (gptResponse && gptResponse.answer) {
+                                    multipleTextAnswers = Array.isArray(gptResponse.answer) 
+                                        ? gptResponse.answer 
+                                        : [gptResponse.answer];
+                                } else {
+                                    console.warn('No valid answers in GPT response for MULTIPLE_TEXT');
+                                    multipleTextAnswers = [];
+                                }
+                                
+                                // Kitöltjük a mezőket sorban, védve az esetleges hibákat
+                                questionData.elements.answerElements.forEach((element, index) => {
+                                    try {
+                                        if (element && multipleTextAnswers[index] !== undefined && multipleTextAnswers[index] !== null) {
+                                            const answerValue = String(multipleTextAnswers[index]).trim();
+                                            if (element.value !== undefined) {
+                                                element.value = answerValue;
+                                                // Dispatch events hogy Moodle észlelje a változást
+                                                try {
+                                                    element.dispatchEvent(new Event('input', { bubbles: true }));
+                                                    element.dispatchEvent(new Event('change', { bubbles: true }));
+                                                } catch (eventError) {
+                                                    console.warn('Failed to dispatch events for field', index, eventError);
+                                                }
+                                            }
+                                        }
+                                    } catch (fieldError) {
+                                        console.error('Error setting value for field', index, fieldError);
+                                    }
+                                });
+                            } catch (error) {
+                                console.error('Error processing MULTIPLE_TEXT answer:', error);
+                            }
+                            break;
+
                         case AnswerType.TEXT:
                             const textAnswer = (typeof gptResponse?.correctAnswers === 'string')
                                 ? gptResponse.correctAnswers
@@ -583,7 +643,18 @@ class QuestionSolver {
 
             // Normalize answers to an array of strings
             let answers = [];
-            if (type === AnswerType.TEXT) {
+            if (type === AnswerType.MULTIPLE_TEXT) {
+                // Több text input esetén az összes választ megjelenítjük
+                let multipleAnswers = [];
+                if (gptResponse && Array.isArray(gptResponse.correctAnswers)) {
+                    multipleAnswers = gptResponse.correctAnswers;
+                } else if (gptResponse && typeof gptResponse.correctAnswers === 'string') {
+                    multipleAnswers = [gptResponse.correctAnswers];
+                } else if (gptResponse && gptResponse.answer) {
+                    multipleAnswers = Array.isArray(gptResponse.answer) ? gptResponse.answer : [gptResponse.answer];
+                }
+                answers = multipleAnswers.map((a, idx) => `Field ${idx + 1}: ${String(a || '').trim()}`).filter(a => a.includes(': ') && a.split(': ')[1]);
+            } else if (type === AnswerType.TEXT) {
                 const txt = (typeof gptResponse?.correctAnswers === 'string')
                     ? gptResponse.correctAnswers
                     : (Array.isArray(gptResponse?.correctAnswers) ? gptResponse.correctAnswers[0] : (gptResponse?.answer || ''));
@@ -666,12 +737,25 @@ class QuestionSolver {
     /**
      * Returns only the answer value(s) as a string for clipboard.
      * - TEXT: single line (answer)
+     * - MULTIPLE_TEXT: newline separated answers
      * - RADIO: single line (selected answer text)
      * - CHECKBOX/SELECT: newline separated or comma separated list
      */
     formatAnswersValuesOnly(questionData, gptResponse) {
         const type = questionData?.data?.type || gptResponse?.type || 'unknown';
         const answersMeta = questionData?.data?.answers || [];
+
+        if (type === AnswerType.MULTIPLE_TEXT) {
+            let multipleAnswers = [];
+            if (gptResponse && Array.isArray(gptResponse.correctAnswers)) {
+                multipleAnswers = gptResponse.correctAnswers;
+            } else if (gptResponse && typeof gptResponse.correctAnswers === 'string') {
+                multipleAnswers = [gptResponse.correctAnswers];
+            } else if (gptResponse && gptResponse.answer) {
+                multipleAnswers = Array.isArray(gptResponse.answer) ? gptResponse.answer : [gptResponse.answer];
+            }
+            return multipleAnswers.map(a => String(a || '').trim()).filter(Boolean).join('\n');
+        }
 
         if (type === AnswerType.TEXT) {
             const txt = (typeof gptResponse?.correctAnswers === 'string')
