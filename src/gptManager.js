@@ -201,6 +201,11 @@ class GPTManager {
         
         fullPrompt += `\n\nInstruction: ${typeInstructions[answerType]}`;
         
+        // Add short answer instruction for TEXT/MULTIPLE_TEXT types
+        if ((answerType === AnswerType.TEXT || answerType === AnswerType.MULTIPLE_TEXT) && config.shortAnswerMode) {
+            fullPrompt += `\n\n⚠️ IMPORTANT: Keep your answer(s) EXTREMELY SHORT and CONCISE. Use minimal words, abbreviations where possible, no explanations. Maximum 3-5 words per answer.`;
+        }
+        
         if (possibleAnswer && possibleAnswer.length > 0) {
             fullPrompt += "\n\nPossible answers:\n" + 
                 possibleAnswer.map((ans, idx) => `index:${idx}, ${ans}`).join('\n');

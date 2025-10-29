@@ -11,6 +11,8 @@ const DEFAULT_CONFIG = {
     maxTokens: 2000,
     // Clipboard behavior
     copyResoults: false,
+    // Short answer mode for TEXT/MULTIPLE_TEXT
+    shortAnswerMode: false,
     // RAG query optimization
     ragQueryOptimizeEnabled: false,
     ragQueryMaxChars: 160,
@@ -141,6 +143,17 @@ class ConfigStore {
      */
     removeListener(listener) {
         configListeners.delete(listener);
+    }
+
+    /**
+     * Toggles short answer mode
+     * @returns {boolean} New state of shortAnswerMode
+     */
+    toggleShortAnswerMode() {
+        currentConfig.shortAnswerMode = !currentConfig.shortAnswerMode;
+        this.save();
+        this.notifyListeners();
+        return currentConfig.shortAnswerMode;
     }
 
     /**

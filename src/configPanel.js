@@ -118,6 +118,11 @@ const ConfigPanel = (() => {
           <small>Amint a GPT válaszol, a válasz(ok) automatikusan a vágólapra kerülnek.</small>
         </div>
         <div class="gpt-config-field">
+          <label for="shortAnswerMode">Rövid válaszok (TEXT/MULTIPLE_TEXT):</label>
+          <input type="checkbox" id="shortAnswerMode" ${currentConfig.shortAnswerMode ? 'checked' : ''}>
+          <small>GPT nagyon rövid, tömör válaszokat ad szöveges kérdésekre. Shortcut: <strong>Cmd/Ctrl+Shift+S</strong></small>
+        </div>
+        <div class="gpt-config-field">
           <label for="ragEnabled">RAG szerver engedélyezése:</label>
           <input type="checkbox" id="ragEnabled" ${currentConfig.ragEnabled ? 'checked' : ''}>
           <small>Ki/bekapcsolja a RAG szervert a válaszok javításához.</small>
@@ -155,57 +160,103 @@ const ConfigPanel = (() => {
         bottom: 20px;
         left: 20px;
         background: rgba(255, 255, 255, 0.95);
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        padding: 10px;
+        border-radius: 6px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
         backdrop-filter: blur(5px);
         z-index: 2147483647;
-        min-width: 300px;
+        min-width: 180px;
+        max-width: 280px;
+        max-height: 85vh;
+        overflow-y: auto;
         display: none;
         pointer-events: auto;
-        transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0) scale(0.55);
+        transform-origin: bottom left;
         will-change: transform;
         opacity: 0.98;
+        font-size: 11px;
       }
       .gpt-config-panel.visible {
         display: block;
+      }
+      .gpt-config-panel::-webkit-scrollbar {
+        width: 6px;
+      }
+      .gpt-config-panel::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 3px;
+      }
+      .gpt-config-panel::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 3px;
+      }
+      .gpt-config-panel::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.3);
       }
       .gpt-config-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
+        position: sticky;
+        top: 0;
+        background: rgba(255, 255, 255, 0.95);
+        padding-bottom: 5px;
+        z-index: 1;
+      }
+      .gpt-config-header h3 {
+        font-size: 14px;
+        margin: 0;
       }
       .gpt-config-close {
         background: none;
         border: none;
-        font-size: 20px;
+        font-size: 18px;
         cursor: pointer;
+        line-height: 1;
       }
       .gpt-config-field {
-        margin-bottom: 15px;
+        margin-bottom: 8px;
       }
       .gpt-config-field label {
         display: block;
-        margin-bottom: 5px;
+        margin-bottom: 3px;
+        font-size: 11px;
+      }
+      .gpt-config-field small {
+        font-size: 9px;
+        display: block;
+        margin-top: 2px;
+        opacity: 0.8;
       }
       .gpt-config-field input,
       .gpt-config-field select {
         width: 100%;
-        padding: 8px;
+        padding: 5px;
         border: 1px solid #ddd;
-        border-radius: 4px;
+        border-radius: 3px;
+        font-size: 11px;
       }
-      .gpt-config-save {
+      .gpt-config-field input[type="checkbox"] {
+        width: auto;
+      }
+      .gpt-config-save,
+      .gpt-config-test,
+      .gpt-config-test-text {
         width: 100%;
-        padding: 10px;
+        padding: 6px;
         background: #007bff;
         color: white;
         border: none;
-        border-radius: 4px;
+        border-radius: 3px;
         cursor: pointer;
+        font-size: 11px;
+        margin-top: 4px;
       }
-      .gpt-config-save:hover {
+      .gpt-config-save:hover,
+      .gpt-config-test:hover,
+      .gpt-config-test-text:hover {
         background: #0056b3;
       }
     `;
@@ -235,6 +286,9 @@ const ConfigPanel = (() => {
     overlay = createStealthOverlay();
     panelElement = createPanel();
     appendToOverlay(panelElement);
+    
+    // Create short answer mode indicator
+    createShortAnswerIndicator();
 
     // Add event listeners
     document.addEventListener('keydown', handleKeyPress);
@@ -252,15 +306,30 @@ const ConfigPanel = (() => {
     // Add config change listener
     configStore.addListener((newConfig) => {
       updatePanelValues(newConfig);
+      updateShortAnswerIndicator(newConfig.shortAnswerMode);
     });
+    
+    // Update indicator initially
+    updateShortAnswerIndicator(currentConfig.shortAnswerMode);
   };
 
   // Event handler for key combinations
   const handleKeyPress = (event) => {
-    // Shift + Control + H
-    if (event.shiftKey && event.ctrlKey && event.key.toLowerCase() === 'h') {
+    // Platform-aware modifier key (Cmd on Mac, Ctrl on Windows/Linux)
+    const modKey = event.metaKey || event.ctrlKey;
+    
+    // Cmd/Ctrl + Shift + H - Toggle config panel
+    if (modKey && event.shiftKey && event.key.toLowerCase() === 'h') {
       toggle();
-      event.preventDefault(); // Prevent browser history from opening
+      event.preventDefault();
+      return;
+    }
+    
+    // Cmd/Ctrl + Shift + S - Toggle short answer mode
+    if (modKey && event.shiftKey && event.key.toLowerCase() === 's') {
+      configStore.toggleShortAnswerMode();
+      // showShortAnswerToast(newState); // Disabled - less intrusive
+      event.preventDefault();
       return;
     }
   };
@@ -295,6 +364,7 @@ const ConfigPanel = (() => {
     const modelSelect = panelElement.querySelector('#model');
     const apiUrlInput = panelElement.querySelector('#apiUrl');
     const copyResultsInput = panelElement.querySelector('#copyResoults');
+    const shortAnswerInput = panelElement.querySelector('#shortAnswerMode');
     const ragEnabledInput = panelElement.querySelector('#ragEnabled');
     const ragServerUrlInput = panelElement.querySelector('#ragServerUrl');
     const ragTopKInput = panelElement.querySelector('#ragTopK');
@@ -305,6 +375,7 @@ const ConfigPanel = (() => {
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
     if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
     if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
+    if (shortAnswerInput) shortAnswerInput.checked = Boolean(config.shortAnswerMode);
     if (ragEnabledInput) ragEnabledInput.checked = Boolean(config.ragEnabled);
     if (ragServerUrlInput) ragServerUrlInput.value = config.ragServerUrl || 'http://localhost:7860';
     if (ragTopKInput) ragTopKInput.value = Number(config.ragTopK || 5);
@@ -323,6 +394,7 @@ const ConfigPanel = (() => {
     const model = panelElement.querySelector('#model').value;
     const apiUrl = panelElement.querySelector('#apiUrl').value;
     const copyResoults = panelElement.querySelector('#copyResoults').checked;
+    const shortAnswerMode = panelElement.querySelector('#shortAnswerMode').checked;
     const ragEnabled = panelElement.querySelector('#ragEnabled').checked;
     const ragServerUrl = panelElement.querySelector('#ragServerUrl').value;
     const ragTopK = Number(panelElement.querySelector('#ragTopK').value || 5);
@@ -340,6 +412,7 @@ const ConfigPanel = (() => {
       model,
       apiUrl,
       copyResoults,
+      shortAnswerMode,
       ragEnabled,
       ragServerUrl,
       ragTopK,
@@ -376,7 +449,6 @@ const ConfigPanel = (() => {
         'This is a connectivity test. Reply with {"type":"text","answer":"OK"}.',
         [],
         AnswerType.TEXT,
-        { apiKey, apiUrl, model, max_tokens: 20, temperature: 0 }
       );
 
       // Accept either strict OK or any non-empty answer as success
@@ -471,6 +543,128 @@ const ConfigPanel = (() => {
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Quick Text Test'; }
     }
+  };
+
+  // Create short answer mode indicator
+  const createShortAnswerIndicator = () => {
+    const indicator = document.createElement('div');
+    indicator.id = 'short-answer-indicator';
+    indicator.innerHTML = '📝';
+    indicator.title = 'Rövid válasz mód (Cmd/Ctrl+Shift+S)';
+    
+    const styles = document.createElement('style');
+    styles.textContent = `
+      #short-answer-indicator {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 18px;
+        height: 18px;
+        background: rgba(100, 100, 100, 0.3);
+        border: 1px solid rgba(80, 80, 80, 0.2);
+        border-radius: 3px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        z-index: 2147483646;
+        box-shadow: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+        opacity: 0.5;
+      }
+      #short-answer-indicator.active {
+        display: flex;
+      }
+      #short-answer-indicator:hover {
+        transform: scale(1.2);
+        opacity: 1;
+        background: rgba(46, 204, 113, 0.7);
+        border-color: rgba(46, 204, 113, 0.5);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .short-answer-toast {
+        position: fixed;
+        top: 50px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.75);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        z-index: 2147483647;
+        font-size: 13px;
+        font-weight: 500;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        animation: slideInRight 0.3s ease-out;
+        pointer-events: none;
+      }
+      .short-answer-toast.success {
+        background: rgba(46, 204, 113, 0.85);
+      }
+      .short-answer-toast.info {
+        background: rgba(52, 152, 219, 0.85);
+      }
+      @keyframes slideInRight {
+        from {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes slideOutRight {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(styles);
+    
+    // Add click handler to toggle
+    indicator.addEventListener('click', () => {
+      configStore.toggleShortAnswerMode();
+      // showShortAnswerToast(newState); // Disabled - less intrusive
+    });
+    
+    document.body.appendChild(indicator);
+  };
+
+  // Update short answer indicator visibility
+  const updateShortAnswerIndicator = (isActive) => {
+    const indicator = document.getElementById('short-answer-indicator');
+    if (indicator) {
+      if (isActive) {
+        indicator.classList.add('active');
+      } else {
+        indicator.classList.remove('active');
+      }
+    }
+  };
+
+  // Show toast notification for short answer mode toggle
+  const showShortAnswerToast = (isActive) => {
+    const toast = document.createElement('div');
+    toast.className = 'short-answer-toast ' + (isActive ? 'success' : 'info');
+    toast.textContent = isActive 
+      ? '✓ Rövid válasz mód BEKAPCSOLVA' 
+      : '✗ Rövid válasz mód KIKAPCSOLVA';
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.animation = 'slideOutRight 0.3s ease-out';
+      setTimeout(() => {
+        document.body.removeChild(toast);
+      }, 300);
+    }, 2000);
   };
 
   // Public API
