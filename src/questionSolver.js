@@ -106,9 +106,21 @@ class QuestionSolver {
         this.getQuizData().then(questions => {
             questions.forEach(question => {
                 this.applyModificationsToQuestion(question);
-            })}).catch(error => {
-                console.error('Error handling Moodle quiz:', error);
             });
+            
+            // Auto-click if there's only one question AND autoMode is enabled
+            const config = configStore.getConfig();
+            if (config.autoMode && questions.length === 1 && questions[0].success) {
+                console.log('Only one question found and autoMode enabled, auto-clicking...');
+                setTimeout(() => {
+                    if (questions[0].elements && questions[0].elements.questionElement) {
+                        questions[0].elements.questionElement.click();
+                    }
+                }, 500); // Small delay to ensure everything is ready
+            }
+        }).catch(error => {
+            console.error('Error handling Moodle quiz:', error);
+        });
     }
 
     /**
@@ -273,6 +285,51 @@ class QuestionSolver {
                 title: img.title || ''
             }));
 
+            // Párosítós kérdések speciális kezelése
+            if (answerType === AnswerType.MATCHING) {
+                const matchingPairs = answerElements.map(selectEl => {
+                    // Keresük meg a sor szövegét (a párosítandó elem)
+                    const row = selectEl.closest('tr');
+                    const itemText = row ? row.querySelector('.text') : null;
+                    const itemLabel = itemText ? itemText.textContent.trim() : '';
+                    
+                    // Gyűjtsük össze az opciókat
+                    const options = Array.from(selectEl.querySelectorAll('option'))
+                        .filter(opt => opt.value !== '0') // Kihagyjuk a "Választás..." opciót
+                        .map(opt => ({
+                            value: opt.value,
+                            text: opt.textContent.trim()
+                        }));
+                    
+                    return {
+                        label: itemLabel,
+                        options: options,
+                        element: selectEl
+                    };
+                });
+
+                return {
+                    elements: {
+                        questionElement: qtextNode,
+                        answerElements: answerElements,
+                        parentNode: node
+                    },
+                    data: {
+                        question: qtextNode.textContent.trim(),
+                        type: answerType,
+                        matchingPairs: matchingPairs,
+                        answers: answerElements.map(el => ({
+                            type: answerType,
+                            text: this.findAnswerText(el),
+                            value: el.value || '',
+                            element: el
+                        })),
+                        images: images
+                    },
+                    success: true
+                };
+            }
+
             return {
                 elements: {
                     questionElement: qtextNode,
@@ -328,14 +385,16 @@ class QuestionSolver {
         const textAnswers = node.querySelectorAll(this.selectors.questionNode.textAnswer);
         const multipleChoice = node.querySelectorAll(this.selectors.questionNode.multipleChoice);
         const checkboxes = node.querySelectorAll(this.selectors.questionNode.checkbox);
-        const select = node.querySelector(this.selectors.questionNode.select);
+        const selects = node.querySelectorAll(this.selectors.questionNode.select);
 
+        // Ha több select elem van (párosítós kérdés)
+        if (selects.length > 1) return AnswerType.MATCHING;
         // Ha több text input mező van, akkor MULTIPLE_TEXT típust adunk vissza
         if (textAnswers.length > 1) return AnswerType.MULTIPLE_TEXT;
         if (textAnswers.length === 1) return AnswerType.TEXT;
         if (multipleChoice.length > 0) return AnswerType.RADIO;
         if (checkboxes.length > 0) return AnswerType.CHECKBOX;
-        if (select) return AnswerType.SELECT;
+        if (selects.length === 1) return AnswerType.SELECT;
         return 'unknown';
     }
 
@@ -347,6 +406,11 @@ class QuestionSolver {
      */
     async getAnswerElementsByType(node, type) {
         switch(type) {
+            case AnswerType.MATCHING:
+                // Párosítós kérdés - több select elem
+                const multipleSelects = node.querySelectorAll(this.selectors.questionNode.select);
+                return Array.from(multipleSelects);
+
             case AnswerType.MULTIPLE_TEXT:
                 // Több text input mező esetén az összeset visszaadjuk
                 const multipleTextInputs = node.querySelectorAll(this.selectors.questionNode.textAnswer);
@@ -458,8 +522,9 @@ class QuestionSolver {
             return;
         }
 
-        if (questionData.data.type === AnswerType.SELECT) {
-            console.warn('Select question type modification not implemented yet');
+        // Only skip single SELECT type (not MATCHING which is multiple selects)
+        if (questionData.data.type === AnswerType.SELECT && questionData.data.type !== AnswerType.MATCHING) {
+            console.warn('Single select question type modification not implemented yet');
             return;
         }
 
@@ -483,13 +548,22 @@ class QuestionSolver {
                     
                     // Prepare options for askGPT
                     const askGPTOptions = {};
+                    let answersForGPT = [];
+                    
                     if (questionData.data.type === AnswerType.MULTIPLE_TEXT) {
                         askGPTOptions.answerFieldsCount = questionData.elements.answerElements.length;
+                        answersForGPT = [];
+                    } else if (questionData.data.type === AnswerType.MATCHING) {
+                        // Párosítós kérdésnél formázzuk a kérdést
+                        askGPTOptions.matchingPairs = questionData.data.matchingPairs;
+                        answersForGPT = [];
+                    } else {
+                        answersForGPT = questionData.data.answers.map(ans => ans.text);
                     }
                     
                     const gptResponse = await gptManager.askGPT(
                         questionData.data.question,
-                        questionData.data.type === AnswerType.MULTIPLE_TEXT ? [] : questionData.data.answers.map(ans => ans.text),
+                        answersForGPT,
                         questionData.data.type,
                         askGPTOptions
                     );
@@ -611,9 +685,69 @@ class QuestionSolver {
                             });
                             break;
 
+                        case AnswerType.MATCHING:
+                            // Párosítós kérdések kezelése
+                            try {
+                                const matchingAnswers = gptResponse.correctAnswers || {};
+                                const matchingPairs = questionData.data.matchingPairs || [];
+                                
+                                matchingPairs.forEach((pair, index) => {
+                                    const selectElement = pair.element;
+                                    const itemLabel = pair.label;
+                                    
+                                    // Keressük meg a megfelelő választ
+                                    let selectedValue = null;
+                                    
+                                    // Ha a GPT válasz egy objektum, ami tartalmazza a párosításokat
+                                    if (typeof matchingAnswers === 'object' && !Array.isArray(matchingAnswers)) {
+                                        selectedValue = matchingAnswers[itemLabel];
+                                    } 
+                                    // Ha a GPT válasz egy tömb indexek szerint
+                                    else if (Array.isArray(matchingAnswers) && matchingAnswers[index]) {
+                                        selectedValue = matchingAnswers[index];
+                                    }
+                                    
+                                    if (selectedValue) {
+                                        // Próbáljuk megtalálni az opció value-ját a szöveg alapján
+                                        const matchingOption = pair.options.find(opt => 
+                                            opt.text.toLowerCase().includes(selectedValue.toLowerCase()) ||
+                                            selectedValue.toLowerCase().includes(opt.text.toLowerCase())
+                                        );
+                                        
+                                        if (matchingOption) {
+                                            selectElement.value = matchingOption.value;
+                                            selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+                                            console.log(`Set ${itemLabel} -> ${matchingOption.text}`);
+                                        } else {
+                                            console.warn(`Could not find matching option for: ${itemLabel} -> ${selectedValue}`);
+                                        }
+                                    }
+                                });
+                            } catch (error) {
+                                console.error('Error processing MATCHING answer:', error);
+                            }
+                            break;
+
                         default:
                             console.warn('Unhandled question type for GPT response application:', questionData.data.type);
                     }
+                    
+                    // Auto-click next button if only one question on page AND autoMode is enabled
+                    const config = configStore.getConfig();
+                    const questionNodes = this.getQuestionNodes();
+                    if (config.autoMode && questionNodes && questionNodes.length === 1) {
+                        console.log('AutoMode enabled, auto-clicking next button...');
+                        setTimeout(() => {
+                            const nextButton = document.querySelector('#mod_quiz-next-nav');
+                            if (nextButton) {
+                                nextButton.click();
+                                console.log('Next button clicked successfully');
+                            } else {
+                                console.warn('Next button (#mod_quiz-next-nav) not found');
+                            }
+                        }, 1000); // Wait 1 second to ensure answer is fully applied
+                    }
+                    
                     // Here you can apply the GPT response to the UI as needed
                 } catch (error) {
                     console.error('Error getting GPT answer:', error);
@@ -643,7 +777,19 @@ class QuestionSolver {
 
             // Normalize answers to an array of strings
             let answers = [];
-            if (type === AnswerType.MULTIPLE_TEXT) {
+            if (type === AnswerType.MATCHING) {
+                // Párosítós kérdések formázása
+                const matchingAnswers = gptResponse.correctAnswers || {};
+                if (typeof matchingAnswers === 'object' && !Array.isArray(matchingAnswers)) {
+                    answers = Object.entries(matchingAnswers).map(([key, value]) => `${key} -> ${value}`);
+                } else if (Array.isArray(matchingAnswers)) {
+                    const matchingPairs = questionData.data.matchingPairs || [];
+                    answers = matchingAnswers.map((value, idx) => {
+                        const label = matchingPairs[idx]?.label || `Item ${idx + 1}`;
+                        return `${label} -> ${value}`;
+                    });
+                }
+            } else if (type === AnswerType.MULTIPLE_TEXT) {
                 // Több text input esetén az összes választ megjelenítjük
                 let multipleAnswers = [];
                 if (gptResponse && Array.isArray(gptResponse.correctAnswers)) {
@@ -744,6 +890,20 @@ class QuestionSolver {
     formatAnswersValuesOnly(questionData, gptResponse) {
         const type = questionData?.data?.type || gptResponse?.type || 'unknown';
         const answersMeta = questionData?.data?.answers || [];
+
+        if (type === AnswerType.MATCHING) {
+            const matchingAnswers = gptResponse.correctAnswers || {};
+            if (typeof matchingAnswers === 'object' && !Array.isArray(matchingAnswers)) {
+                return Object.entries(matchingAnswers).map(([key, value]) => `${key} -> ${value}`).join('\n');
+            } else if (Array.isArray(matchingAnswers)) {
+                const matchingPairs = questionData.data.matchingPairs || [];
+                return matchingAnswers.map((value, idx) => {
+                    const label = matchingPairs[idx]?.label || `Item ${idx + 1}`;
+                    return `${label} -> ${value}`;
+                }).join('\n');
+            }
+            return '';
+        }
 
         if (type === AnswerType.MULTIPLE_TEXT) {
             let multipleAnswers = [];

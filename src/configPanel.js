@@ -123,6 +123,11 @@ const ConfigPanel = (() => {
           <small>GPT nagyon rövid, tömör válaszokat ad szöveges kérdésekre. Shortcut: <strong>Cmd/Ctrl+Shift+S</strong></small>
         </div>
         <div class="gpt-config-field">
+          <label for="autoMode">Automatikus mód:</label>
+          <input type="checkbox" id="autoMode" ${currentConfig.autoMode ? 'checked' : ''}>
+          <small>Ha csak 1 kérdés van az oldalon, automatikusan megoldja és rákattint a Next gombra.</small>
+        </div>
+        <div class="gpt-config-field">
           <label for="ragEnabled">RAG szerver engedélyezése:</label>
           <input type="checkbox" id="ragEnabled" ${currentConfig.ragEnabled ? 'checked' : ''}>
           <small>Ki/bekapcsolja a RAG szervert a válaszok javításához.</small>
@@ -365,6 +370,7 @@ const ConfigPanel = (() => {
     const apiUrlInput = panelElement.querySelector('#apiUrl');
     const copyResultsInput = panelElement.querySelector('#copyResoults');
     const shortAnswerInput = panelElement.querySelector('#shortAnswerMode');
+    const autoModeInput = panelElement.querySelector('#autoMode');
     const ragEnabledInput = panelElement.querySelector('#ragEnabled');
     const ragServerUrlInput = panelElement.querySelector('#ragServerUrl');
     const ragTopKInput = panelElement.querySelector('#ragTopK');
@@ -376,6 +382,7 @@ const ConfigPanel = (() => {
     if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
     if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
     if (shortAnswerInput) shortAnswerInput.checked = Boolean(config.shortAnswerMode);
+    if (autoModeInput) autoModeInput.checked = Boolean(config.autoMode);
     if (ragEnabledInput) ragEnabledInput.checked = Boolean(config.ragEnabled);
     if (ragServerUrlInput) ragServerUrlInput.value = config.ragServerUrl || 'http://localhost:7860';
     if (ragTopKInput) ragTopKInput.value = Number(config.ragTopK || 5);
@@ -395,6 +402,7 @@ const ConfigPanel = (() => {
     const apiUrl = panelElement.querySelector('#apiUrl').value;
     const copyResoults = panelElement.querySelector('#copyResoults').checked;
     const shortAnswerMode = panelElement.querySelector('#shortAnswerMode').checked;
+    const autoMode = panelElement.querySelector('#autoMode').checked;
     const ragEnabled = panelElement.querySelector('#ragEnabled').checked;
     const ragServerUrl = panelElement.querySelector('#ragServerUrl').value;
     const ragTopK = Number(panelElement.querySelector('#ragTopK').value || 5);
@@ -413,6 +421,7 @@ const ConfigPanel = (() => {
       apiUrl,
       copyResoults,
       shortAnswerMode,
+      autoMode,
       ragEnabled,
       ragServerUrl,
       ragTopK,

@@ -13,7 +13,8 @@ const AnswerType = {
     RADIO: 'radio',
     TEXT: 'text',
     SELECT: 'select',
-    MULTIPLE_TEXT: 'MULTIPLE_TEXT'
+    MULTIPLE_TEXT: 'MULTIPLE_TEXT',
+    MATCHING: 'matching'
 };
 
 
@@ -154,8 +155,11 @@ class GPTManager {
             throw new Error('Invalid answer type. Must be one of: ' + Object.values(AnswerType).join(', ') + ', MULTIPLE_TEXT');
         }
 
-        // Validate possible answers for non-text types
-        if (answerType !== AnswerType.TEXT && answerType !== 'MULTIPLE_TEXT' && (!possibleAnswer || possibleAnswer.length === 0)) {
+        // Validate possible answers for non-text types (except MATCHING which uses matchingPairs in options)
+        if (answerType !== AnswerType.TEXT && 
+            answerType !== 'MULTIPLE_TEXT' && 
+            answerType !== AnswerType.MATCHING && 
+            (!possibleAnswer || possibleAnswer.length === 0)) {
             throw new Error('Possible answers must be provided for non-text answer types');
         }
         
@@ -196,7 +200,8 @@ class GPTManager {
             [AnswerType.CHECKBOX]: "Select ALL correct answers.",
             [AnswerType.SELECT]: "Select ALL applicable answers.",
             [AnswerType.TEXT]: "Provide a concise text answer.",
-            [AnswerType.MULTIPLE_TEXT]: `This question has ${answerFieldsCount} separate answer fields. Provide ${answerFieldsCount} separate answers in the correctAnswers array, one for each field in order.`
+            [AnswerType.MULTIPLE_TEXT]: `This question has ${answerFieldsCount} separate answer fields. Provide ${answerFieldsCount} separate answers in the correctAnswers array, one for each field in order.`,
+            [AnswerType.MATCHING]: "Match each item on the left with the correct definition/description on the right."
         };
         
         fullPrompt += `\n\nInstruction: ${typeInstructions[answerType]}`;
@@ -206,7 +211,19 @@ class GPTManager {
             fullPrompt += `\n\n⚠️ IMPORTANT: Keep your answer(s) EXTREMELY SHORT and CONCISE. Use minimal words, abbreviations where possible, no explanations. Maximum 3-5 words per answer.`;
         }
         
-        if (possibleAnswer && possibleAnswer.length > 0) {
+        // Párosítós kérdések speciális formázása
+        if (answerType === AnswerType.MATCHING && options.matchingPairs) {
+            fullPrompt += "\n\nMatching pairs to complete:";
+            options.matchingPairs.forEach((pair, index) => {
+                fullPrompt += `\n${index + 1}. "${pair.label}" -> `;
+                fullPrompt += "\n   Options: " + pair.options.map(opt => `${opt.value}. ${opt.text}`).join(' | ');
+            });
+            fullPrompt += `\n\nResponse format:\n{\n  "type": "matching",\n  "correctAnswers": {\n`;
+            options.matchingPairs.forEach((pair, index) => {
+                fullPrompt += `    "${pair.label}": "matching option text"${index < options.matchingPairs.length - 1 ? ',' : ''}\n`;
+            });
+            fullPrompt += `  }\n}\nFor each item, provide the text of the correct matching option.`;
+        } else if (possibleAnswer && possibleAnswer.length > 0) {
             fullPrompt += "\n\nPossible answers:\n" + 
                 possibleAnswer.map((ans, idx) => `index:${idx}, ${ans}`).join('\n');
         }
@@ -225,6 +242,10 @@ class GPTManager {
             const cleanOptions = { ...options };
             delete cleanOptions.messages;
             delete cleanOptions.prompt;
+            // Also remove custom options that shouldn't be sent to the API
+            delete cleanOptions.answerFieldsCount;
+            delete cleanOptions.matchingPairs;
+            
             // Extract optional overrides
             const apiKeyOverride = options.apiKey;
             const apiUrlOverride = options.apiUrl;

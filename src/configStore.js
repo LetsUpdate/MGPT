@@ -13,6 +13,8 @@ const DEFAULT_CONFIG = {
     copyResoults: false,
     // Short answer mode for TEXT/MULTIPLE_TEXT
     shortAnswerMode: false,
+    // Auto mode - automatic question clicking and next button
+    autoMode: false,
     // RAG query optimization
     ragQueryOptimizeEnabled: false,
     ragQueryMaxChars: 160,
