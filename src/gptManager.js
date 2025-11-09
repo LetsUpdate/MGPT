@@ -2,6 +2,7 @@
 const configStore = require('./configStore');
 const scriptConfig = require('./config');
 const ragClient = require('./ragClient');
+const SystemPromptGenerator = require('./systemPromptGenerator');
 
 
 // Global GPT manager instance
@@ -191,46 +192,24 @@ class GPTManager {
             console.warn('RAG retrieval failed or disabled:', e?.message || e);
         }
 
-        // Construct the prompt with question type, question and possible answers
-    let fullPrompt = `${contextPrefix}Question Type: [${answerType.toUpperCase()}]\n\n${question}`;
-        
-        // Add answer format instruction based on type
-        const typeInstructions = {
-            [AnswerType.RADIO]: "Please select exactly ONE correct answer.",
-            [AnswerType.CHECKBOX]: "Select ALL correct answers.",
-            [AnswerType.SELECT]: "Select ALL applicable answers.",
-            [AnswerType.TEXT]: "Provide a concise text answer.",
-            [AnswerType.MULTIPLE_TEXT]: `This question has ${answerFieldsCount} separate answer fields. Provide ${answerFieldsCount} separate answers in the correctAnswers array, one for each field in order.`,
-            [AnswerType.MATCHING]: "Match each item on the left with the correct definition/description on the right."
-        };
-        
-        fullPrompt += `\n\nInstruction: ${typeInstructions[answerType]}`;
+        // Construct simplified prompt - most instructions are now in system prompt
+        let fullPrompt = `${contextPrefix}${question}`;
         
         // Add short answer instruction for TEXT/MULTIPLE_TEXT types
         if ((answerType === AnswerType.TEXT || answerType === AnswerType.MULTIPLE_TEXT) && config.shortAnswerMode) {
             fullPrompt += `\n\n⚠️ IMPORTANT: Keep your answer(s) EXTREMELY SHORT and CONCISE. Use minimal words, abbreviations where possible, no explanations. Maximum 3-5 words per answer.`;
         }
         
-        // Párosítós kérdések speciális formázása
+        // Add options for matching or multiple choice questions
         if (answerType === AnswerType.MATCHING && options.matchingPairs) {
             fullPrompt += "\n\nMatching pairs to complete:";
             options.matchingPairs.forEach((pair, index) => {
                 fullPrompt += `\n${index + 1}. "${pair.label}" -> `;
                 fullPrompt += "\n   Options: " + pair.options.map(opt => `${opt.value}. ${opt.text}`).join(' | ');
             });
-            fullPrompt += `\n\nResponse format:\n{\n  "type": "matching",\n  "correctAnswers": {\n`;
-            options.matchingPairs.forEach((pair, index) => {
-                fullPrompt += `    "${pair.label}": "matching option text"${index < options.matchingPairs.length - 1 ? ',' : ''}\n`;
-            });
-            fullPrompt += `  }\n}\nFor each item, provide the text of the correct matching option.`;
         } else if (possibleAnswer && possibleAnswer.length > 0) {
             fullPrompt += "\n\nPossible answers:\n" + 
-                possibleAnswer.map((ans, idx) => `index:${idx}, ${ans}`).join('\n');
-        }
-        
-        // MULTIPLE_TEXT esetén példa formátum megadása
-        if (answerType === AnswerType.MULTIPLE_TEXT) {
-            fullPrompt += `\n\nResponse format example:\n{\n  "type": "MULTIPLE_TEXT",\n  "correctAnswers": ["answer1", "answer2", "answer3", ...]\n}\nProvide exactly ${answerFieldsCount} answers in the array.`;
+                possibleAnswer.map((ans, idx) => `${idx}. ${ans}`).join('\n');
         }
         
         console.log('Full Prompt Sent to GPT:', fullPrompt);
@@ -250,6 +229,9 @@ class GPTManager {
             const apiKeyOverride = options.apiKey;
             const apiUrlOverride = options.apiUrl;
             const modelOverride = options.model;
+
+            // Build dynamic system prompt based on question type using the generator
+            const dynamicSystemPrompt = SystemPromptGenerator.generate(answerType, answerFieldsCount);
 
             // Decide whether to send 'messages' (chat completions endpoint) or 'prompt' (completion-like endpoints).
             // The configured API URL in `scriptConfig.API_URL` usually indicates which format is expected.
@@ -271,14 +253,14 @@ class GPTManager {
                     requestBody.messages = [
                         {
                             role: 'user',
-                            content: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]\n\n` + fullPrompt
+                            content: dynamicSystemPrompt + '\n\n' + fullPrompt
                         }
                     ];
                 } else {
                     requestBody.messages = [
                         {
                             role: 'system',
-                            content: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]`
+                            content: dynamicSystemPrompt
                         },
                         {
                             role: 'user',
@@ -292,7 +274,7 @@ class GPTManager {
                 // For non-chat endpoints (completions / responses) use a single prompt field
                 requestBody = {
                     ...requestBody,
-                    prompt: scriptConfig.SYSTEM_PROMPT + `\nCurrent question type: [${answerType.toUpperCase()}]\n\n` + fullPrompt,
+                    prompt: dynamicSystemPrompt + '\n\n' + fullPrompt,
                     max_tokens: 150,
                     temperature: 0.7,
                     ...cleanOptions
@@ -306,7 +288,7 @@ class GPTManager {
                 requestBody.messages = [
                     {
                         role: 'system',
-                        content: scriptConfig.SYSTEM_PROMPT
+                        content: dynamicSystemPrompt
                     },
                     {
                         role: 'user',
