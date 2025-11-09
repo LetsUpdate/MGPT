@@ -15,6 +15,8 @@ const DEFAULT_CONFIG = {
     shortAnswerMode: false,
     // Auto mode - automatic question clicking and next button
     autoMode: false,
+    // Maximum parallel questions to solve automatically (when multiple questions on one page)
+    maxParallelQuestions: 10,
     // RAG query optimization
     ragQueryOptimizeEnabled: false,
     ragQueryMaxChars: 160,

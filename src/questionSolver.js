@@ -6,8 +6,13 @@ const configStore = require('./configStore');
 
 class QuestionSolver {
     constructor() {
-        // Avoid concurrent GPT requests
-        this.isRequestInFlight = false;
+        // Track requests per question instead of globally to allow parallel requests
+        this.requestsInFlight = new Set();
+        
+        // Track auto-solve session
+        this.autoSolveActive = false;
+        this.autoSolveTotalQuestions = 0;
+        this.autoSolveCompletedQuestions = 0;
 
         // DOM selector configurations
         this.selectors = {
@@ -108,19 +113,67 @@ class QuestionSolver {
                 this.applyModificationsToQuestion(question);
             });
             
-            // Auto-click if there's only one question AND autoMode is enabled
+            // Auto-solve questions in parallel if autoMode is enabled
             const config = configStore.getConfig();
-            if (config.autoMode && questions.length === 1 && questions[0].success) {
-                console.log('Only one question found and autoMode enabled, auto-clicking...');
-                setTimeout(() => {
-                    if (questions[0].elements && questions[0].elements.questionElement) {
-                        questions[0].elements.questionElement.click();
-                    }
-                }, 500); // Small delay to ensure everything is ready
+            if (config.autoMode && questions.length > 0) {
+                // Determine how many questions to solve in parallel (up to the limit)
+                const numQuestionsToSolve = Math.min(questions.length, config.maxParallelQuestions || 10);
+                const questionsToSolve = questions.slice(0, numQuestionsToSolve).filter(q => q.success);
+                
+                if (questionsToSolve.length > 0) {
+                    console.log(`AutoMode enabled: solving ${questionsToSolve.length} questions in parallel (limit: ${config.maxParallelQuestions || 10})`);
+                    
+                    // Initialize auto-solve tracking
+                    this.autoSolveActive = true;
+                    this.autoSolveTotalQuestions = questionsToSolve.length;
+                    this.autoSolveCompletedQuestions = 0;
+                    
+                    // Solve all questions in parallel
+                    questionsToSolve.forEach((question, index) => {
+                        // Add a small delay between each question start to avoid overwhelming the system
+                        setTimeout(() => {
+                            if (question.elements && question.elements.questionElement) {
+                                console.log(`Auto-solving question ${index + 1}/${questionsToSolve.length}`);
+                                question.elements.questionElement.click();
+                            }
+                        }, index * 100); // 100ms delay between each question
+                    });
+                }
             }
         }).catch(error => {
             console.error('Error handling Moodle quiz:', error);
         });
+    }
+
+    /**
+     * Check if all auto-solve questions are completed and click Next button if needed
+     */
+    checkAutoSolveCompletion() {
+        if (!this.autoSolveActive) {
+            return;
+        }
+        
+        if (this.autoSolveCompletedQuestions >= this.autoSolveTotalQuestions) {
+            console.log(`All ${this.autoSolveTotalQuestions} questions completed, clicking Next button...`);
+            
+            // Reset auto-solve tracking
+            this.autoSolveActive = false;
+            this.autoSolveTotalQuestions = 0;
+            this.autoSolveCompletedQuestions = 0;
+            
+            // Click the Next button
+            setTimeout(() => {
+                const nextButton = document.querySelector('#mod_quiz-next-nav');
+                if (nextButton) {
+                    console.log('Next button clicked successfully');
+                    nextButton.click();
+                } else {
+                    console.warn('Next button (#mod_quiz-next-nav) not found');
+                }
+            }, 500); // Small delay to ensure last answer is fully applied
+        } else {
+            console.log(`Auto-solve progress: ${this.autoSolveCompletedQuestions}/${this.autoSolveTotalQuestions} questions completed`);
+        }
     }
 
     /**
@@ -535,14 +588,20 @@ class QuestionSolver {
         });
 
         if (questionData.elements && questionData.elements.questionElement) {
+            // Generate a unique ID for this question to track its request
+            const questionId = questionData.elements.parentNode.id || 
+                              `question-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
             // Add click event listener to the question element
             questionData.elements.questionElement.addEventListener('click', async () => {
                 try {
-                    if (this.isRequestInFlight) {
-                        console.warn('A request is already in progress. Please wait.');
+                    // Check if this specific question already has a request in flight
+                    if (this.requestsInFlight.has(questionId)) {
+                        console.warn(`Request already in progress for question: ${questionId}`);
                         return;
                     }
-                    this.isRequestInFlight = true;
+                    
+                    this.requestsInFlight.add(questionId);
                     this.setQuestionBusy(questionData.elements.parentNode, true);
                     console.log('Question clicked:', questionData.data.question);
                     
@@ -732,21 +791,8 @@ class QuestionSolver {
                             console.warn('Unhandled question type for GPT response application:', questionData.data.type);
                     }
                     
-                    // Auto-click next button if only one question on page AND autoMode is enabled
-                    const config = configStore.getConfig();
-                    const questionNodes = this.getQuestionNodes();
-                    if (config.autoMode && questionNodes && questionNodes.length === 1) {
-                        console.log('AutoMode enabled, auto-clicking next button...');
-                        setTimeout(() => {
-                            const nextButton = document.querySelector('#mod_quiz-next-nav');
-                            if (nextButton) {
-                                nextButton.click();
-                                console.log('Next button clicked successfully');
-                            } else {
-                                console.warn('Next button (#mod_quiz-next-nav) not found');
-                            }
-                        }, 1000); // Wait 1 second to ensure answer is fully applied
-                    }
+                    // Note: Auto-click next button is now handled in handleMoodleQuiz for multiple questions
+                    // This prevents individual questions from clicking next prematurely
                     
                     // Here you can apply the GPT response to the UI as needed
                 } catch (error) {
@@ -754,7 +800,13 @@ class QuestionSolver {
                 } finally {
                     this.setQuestionBusy(questionData.elements.parentNode, false);
                     this.markQuestionCompleted(questionData.elements.parentNode);
-                    this.isRequestInFlight = false;
+                    this.requestsInFlight.delete(questionId);
+                    
+                    // If auto-solve is active, increment completed count and check if all done
+                    if (this.autoSolveActive) {
+                        this.autoSolveCompletedQuestions++;
+                        this.checkAutoSolveCompletion();
+                    }
                 }
             });
             console.log('Click listener added to question:', questionData.data.question);

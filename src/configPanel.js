@@ -125,7 +125,12 @@ const ConfigPanel = (() => {
         <div class="gpt-config-field">
           <label for="autoMode">Automatikus mód:</label>
           <input type="checkbox" id="autoMode" ${currentConfig.autoMode ? 'checked' : ''}>
-          <small>Ha csak 1 kérdés van az oldalon, automatikusan megoldja és rákattint a Next gombra.</small>
+          <small>Automatikusan megoldja a kérdéseket és rákattint a Next gombra.</small>
+        </div>
+        <div class="gpt-config-field">
+          <label for="maxParallelQuestions">Max párhuzamos kérdések:</label>
+          <input type="number" id="maxParallelQuestions" value="${currentConfig.maxParallelQuestions || 10}" min="1" max="50" step="1">
+          <small>Maximális párhuzamosan megoldható kérdések száma (alapértelmezett: 10).</small>
         </div>
         <div class="gpt-config-field">
           <label for="ragEnabled">RAG szerver engedélyezése:</label>
@@ -371,6 +376,7 @@ const ConfigPanel = (() => {
     const copyResultsInput = panelElement.querySelector('#copyResoults');
     const shortAnswerInput = panelElement.querySelector('#shortAnswerMode');
     const autoModeInput = panelElement.querySelector('#autoMode');
+    const maxParallelQuestionsInput = panelElement.querySelector('#maxParallelQuestions');
     const ragEnabledInput = panelElement.querySelector('#ragEnabled');
     const ragServerUrlInput = panelElement.querySelector('#ragServerUrl');
     const ragTopKInput = panelElement.querySelector('#ragTopK');
@@ -383,6 +389,7 @@ const ConfigPanel = (() => {
     if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
     if (shortAnswerInput) shortAnswerInput.checked = Boolean(config.shortAnswerMode);
     if (autoModeInput) autoModeInput.checked = Boolean(config.autoMode);
+    if (maxParallelQuestionsInput) maxParallelQuestionsInput.value = Number(config.maxParallelQuestions || 10);
     if (ragEnabledInput) ragEnabledInput.checked = Boolean(config.ragEnabled);
     if (ragServerUrlInput) ragServerUrlInput.value = config.ragServerUrl || 'http://localhost:7860';
     if (ragTopKInput) ragTopKInput.value = Number(config.ragTopK || 5);
@@ -403,6 +410,7 @@ const ConfigPanel = (() => {
     const copyResoults = panelElement.querySelector('#copyResoults').checked;
     const shortAnswerMode = panelElement.querySelector('#shortAnswerMode').checked;
     const autoMode = panelElement.querySelector('#autoMode').checked;
+    const maxParallelQuestions = Number(panelElement.querySelector('#maxParallelQuestions').value || 10);
     const ragEnabled = panelElement.querySelector('#ragEnabled').checked;
     const ragServerUrl = panelElement.querySelector('#ragServerUrl').value;
     const ragTopK = Number(panelElement.querySelector('#ragTopK').value || 5);
@@ -422,6 +430,7 @@ const ConfigPanel = (() => {
       copyResoults,
       shortAnswerMode,
       autoMode,
+      maxParallelQuestions,
       ragEnabled,
       ragServerUrl,
       ragTopK,
