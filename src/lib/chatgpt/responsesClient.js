@@ -43,38 +43,59 @@ class ResponsesAPIClient {
             throw new Error('Filename is required');
         }
 
-        // Create FormData for file upload
-        const formData = new FormData();
+        // Convert content to binary data
+        let binaryData;
+        let mimeType = 'application/octet-stream';
         
-        // Convert content to Blob
-        let blob;
         if (content.startsWith('data:')) {
-            // Base64 data URL
-            const base64Data = content.split(',')[1];
-            const binaryData = atob(base64Data);
-            const bytes = new Uint8Array(binaryData.length);
-            for (let i = 0; i < binaryData.length; i++) {
-                bytes[i] = binaryData.charCodeAt(i);
+            // Base64 data URL - extract mime type and data
+            const matches = content.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+                mimeType = matches[1];
+                const base64Data = matches[2];
+                binaryData = atob(base64Data);
+            } else {
+                throw new Error('Invalid data URL format');
             }
-            blob = new Blob([bytes]);
         } else {
             // Plain text
-            blob = new Blob([content], { type: 'text/plain' });
+            binaryData = content;
+            mimeType = 'text/plain';
         }
 
-        formData.append('file', blob, filename);
-        formData.append('purpose', purpose);
+        // Manually construct multipart/form-data
+        // GM_xmlhttpRequest doesn't support FormData objects, so we build it manually
+        const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substr(2);
+        const delimiter = '\r\n--' + boundary + '\r\n';
+        const closeDelimiter = '\r\n--' + boundary + '--';
+
+        // Build the multipart body
+        let body = '';
+        
+        // Add file field
+        body += delimiter;
+        body += 'Content-Disposition: form-data; name="file"; filename="' + filename + '"\r\n';
+        body += 'Content-Type: ' + mimeType + '\r\n\r\n';
+        body += binaryData;
+        
+        // Add purpose field
+        body += delimiter;
+        body += 'Content-Disposition: form-data; name="purpose"\r\n\r\n';
+        body += purpose;
+        
+        // Close
+        body += closeDelimiter;
 
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: `${this.baseUrl}/files`,
                 headers: {
-                    'Authorization': `Bearer ${this.apiKey}`
-                    // Content-Type will be set automatically for FormData
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'Content-Type': 'multipart/form-data; boundary=' + boundary
                 },
-                data: formData,
-                binary: true, // Important for file uploads
+                data: body,
+                binary: true, // Important for binary file data
                 onload: (response) => {
                     try {
                         if (response.status < 200 || response.status >= 300) {
