@@ -423,6 +423,43 @@ class ResponsesAPIClient {
             });
         });
     }
+
+    /**
+     * Delete a file
+     * @param {string} fileId - File ID to delete
+     * @returns {Promise<Object>} Deletion response
+     */
+    async deleteFile(fileId) {
+        if (!this.apiKey) {
+            throw new Error('API key not configured');
+        }
+
+        if (!fileId) {
+            throw new Error('File ID is required');
+        }
+
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: 'DELETE',
+                url: `${this.baseUrl}/files/${fileId}`,
+                headers: {
+                    'Authorization': `Bearer ${this.apiKey}`
+                },
+                onload: (response) => {
+                    try {
+                        if (response.status < 200 || response.status >= 300) {
+                            throw new Error(`HTTP ${response.status}: ${response.responseText}`);
+                        }
+                        const data = JSON.parse(response.responseText);
+                        resolve(data);
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                onerror: (error) => reject(error)
+            });
+        });
+    }
 }
 
 module.exports = ResponsesAPIClient;

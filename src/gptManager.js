@@ -2,7 +2,8 @@
 const configStore = require('./configStore');
 const scriptConfig = require('./config');
 const SystemPromptGenerator = require('./systemPromptGenerator');
-const { ChatGPTClient } = require('./lib/chatgpt');
+const { ChatGPTClient, ResponsesAPIClient } = require('./lib/chatgpt');
+const { Logger } = require('./logger');
 
 
 // Global GPT manager instance
@@ -102,6 +103,23 @@ class GPTManager {
         if (answerType === 'MULTIPLE_TEXT' && answerFieldsCount < 1) {
             console.warn('MULTIPLE_TEXT requires answerFieldsCount >= 1, defaulting to 1');
         }
+
+        // ====== RESPONSES API INTEGRATION ======
+        // Check if Responses API is enabled and configured
+        if (config.useResponsesAPI && config.assistantId) {
+            Logger.logQuizQuestion(question, answerType, true);
+            Logger.logContextVerification(true, config.uploadedFiles?.length || 0, config.assistantId);
+            
+            try {
+                return await this._askWithResponsesAPI(question, possibleAnswer, answerType, answerFieldsCount, config);
+            } catch (error) {
+                Logger.error('QUIZ', 'Responses API failed, falling back to standard API', error);
+                // Fall through to standard API on error
+            }
+        } else {
+            Logger.logQuizQuestion(question, answerType, false);
+        }
+        // ====== END RESPONSES API INTEGRATION ======
 
         // Construct prompt with question and optional context
         let fullPrompt = question;
@@ -327,6 +345,121 @@ class GPTManager {
      */
     updateConfig(newConfig) {
         configStore.update(newConfig);
+    }
+
+    /**
+     * Ask GPT using Responses API (Assistants)
+     * @private
+     */
+    async _askWithResponsesAPI(question, possibleAnswer, answerType, answerFieldsCount, config) {
+        Logger.info('RESPONSES_API', 'Starting Responses API request');
+        
+        try {
+            // Initialize Responses API client
+            const responsesClient = new ResponsesAPIClient({
+                apiKey: config.apiKey,
+                model: config.model
+            });
+            
+            responsesClient.assistantId = config.assistantId;
+            responsesClient.threadId = config.threadId;
+            
+            // Build the question with context
+            let fullQuestion = question;
+            
+            // Add short answer instruction
+            if ((answerType === AnswerType.TEXT || answerType === AnswerType.MULTIPLE_TEXT) && config.shortAnswerMode) {
+                fullQuestion += `\n\n⚠️ IMPORTANT: Keep your answer(s) EXTREMELY SHORT and CONCISE. Use minimal words, abbreviations where possible, no explanations. Maximum 3-5 words per answer.`;
+            }
+            
+            // Add possible answers
+            if (possibleAnswer && possibleAnswer.length > 0) {
+                fullQuestion += "\n\nPossible answers:\n" + 
+                    possibleAnswer.map((ans, idx) => `${idx}. ${ans}`).join('\n');
+            }
+            
+            // Add format instructions based on answer type
+            const systemPrompt = SystemPromptGenerator.generate(answerType, answerFieldsCount);
+            fullQuestion += `\n\n${systemPrompt}`;
+            
+            Logger.debug('RESPONSES_API', 'Sending message to assistant', {
+                assistantId: config.assistantId,
+                threadId: config.threadId,
+                questionLength: fullQuestion.length
+            });
+            
+            // Send message
+            Logger.logAPIRequest('RESPONSES_API', '/threads/messages', 'POST');
+            const result = await responsesClient.sendMessage({
+                message: fullQuestion,
+                includeThinking: true // Enable thinking for better debugging
+            });
+            Logger.logAPIResponse('RESPONSES_API', '/threads/messages', 200);
+            
+            // Save thread ID for next question
+            if (responsesClient.threadId !== config.threadId) {
+                configStore.update({ threadId: responsesClient.threadId });
+                Logger.debug('RESPONSES_API', 'Thread ID updated', { threadId: responsesClient.threadId });
+            }
+            
+            Logger.info('RESPONSES_API', 'Response received', {
+                contentLength: result.content?.length || 0,
+                hasThinking: !!result.thinking
+            });
+            
+            if (result.thinking) {
+                Logger.debug('RESPONSES_API', 'Thinking process', { thinking: result.thinking });
+            }
+            
+            // Parse the response based on answer type
+            return this._parseResponseForType(result.content, answerType, possibleAnswer, answerFieldsCount);
+            
+        } catch (error) {
+            Logger.error('RESPONSES_API', 'Request failed', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Parse response based on answer type
+     * @private
+     */
+    _parseResponseForType(content, answerType, possibleAnswer, answerFieldsCount) {
+        Logger.debug('PARSING', `Parsing response for type: ${answerType}`);
+        
+        try {
+            // Try to parse as JSON first
+            const parsed = JSON.parse(content);
+            Logger.info('PARSING', 'Successfully parsed JSON response', parsed);
+            return parsed;
+        } catch (e) {
+            // If not JSON, try to extract answer from text
+            Logger.debug('PARSING', 'Response is not JSON, parsing as text');
+            
+            if (answerType === AnswerType.CHECKBOX || answerType === AnswerType.SELECT) {
+                // Extract array of answers
+                const matches = content.match(/\d+/g);
+                if (matches) {
+                    const indices = matches.map(m => parseInt(m));
+                    const answers = indices.map(idx => possibleAnswer[idx]).filter(Boolean);
+                    Logger.info('PARSING', 'Extracted checkbox/select answers', answers);
+                    return { type: answerType, answer: answers };
+                }
+            } else if (answerType === AnswerType.RADIO) {
+                // Extract single answer
+                const match = content.match(/\d+/);
+                if (match) {
+                    const idx = parseInt(match[0]);
+                    const answer = possibleAnswer[idx];
+                    Logger.info('PARSING', 'Extracted radio answer', answer);
+                    return { type: answerType, answer };
+                }
+            }
+            
+            // Default: return as text
+            Logger.info('PARSING', 'Returning as text answer');
+            return { type: answerType, answer: content.trim() };
+        }
     }
 
     /**

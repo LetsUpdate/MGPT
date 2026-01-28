@@ -17,7 +17,14 @@ const DEFAULT_CONFIG = {
     autoMode: false,
     // Maximum parallel questions to solve automatically (when multiple questions on one page)
     maxParallelQuestions: 10,
-    isConfigured: false
+    isConfigured: false,
+    // Responses API configuration
+    useResponsesAPI: false,
+    assistantId: null,
+    threadId: null,
+    uploadedFiles: [],
+    // Debug logging
+    debugLogging: true
 };
 
 // Configuration change listeners

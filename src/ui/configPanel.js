@@ -1,6 +1,8 @@
 // Configuration Panel Module
 const configStore = require('../configStore');
 const fileUploadHelpers = require('../fileUploadHelpers');
+const documentManager = require('../documentManager');
+const { Logger } = require('../logger');
 
 const ConfigPanel = (() => {
   const usf = unsafeWindow;
@@ -126,6 +128,28 @@ const ConfigPanel = (() => {
           <button class="gpt-config-upload-file" style="width: 100%; padding: 4px; margin-top: 4px; font-size: 10px;">Feltöltés</button>
           <small>PDF, TXT fájlok feltöltése a pontosabb válaszokhoz.</small>
           <div id="uploadedFilesList" style="margin-top: 4px; font-size: 9px; max-height: 60px; overflow-y: auto;"></div>
+        </div>
+        
+        <div class="gpt-config-field">
+          <label for="useResponsesAPI">✨ Használd a Responses API-t:</label>
+          <input type="checkbox" id="useResponsesAPI" ${currentConfig.useResponsesAPI ? 'checked' : ''}>
+          <small><strong>Bekapcsolva:</strong> A feltöltött fájlokat használja válaszadáshoz. <strong>Először hozz létre asszisztenst!</strong></small>
+        </div>
+        
+        <div class="gpt-config-field" style="background: rgba(0,100,255,0.05); padding: 6px; border-radius: 3px; margin-top: 4px;">
+          <div style="font-size: 9px; font-weight: bold; margin-bottom: 3px;">📊 Asszisztens Státusz:</div>
+          <div id="assistantStatus" style="font-size: 9px;"></div>
+          <button class="gpt-config-create-assistant" style="width: 100%; padding: 4px; margin-top: 4px; font-size: 9px; background: #28a745;">Asszisztens Létrehozása</button>
+        </div>
+        
+        <div class="gpt-config-field">
+          <label for="debugLogging">🐛 Debug Naplózás:</label>
+          <input type="checkbox" id="debugLogging" ${currentConfig.debugLogging !== false ? 'checked' : ''}>
+          <small>Részletes naplók megjelenítése a konzolban és a napló nézetben.</small>
+        </div>
+        
+        <div class="gpt-config-field" style="background: rgba(100,100,100,0.05); padding: 6px; border-radius: 3px;">
+          <button class="gpt-config-show-logs" style="width: 100%; padding: 4px; font-size: 9px; background: #6c757d; color: white;">📜 Naplók Megtekintése</button>
         </div>
         
         <hr style="margin: 8px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);">
@@ -308,12 +332,20 @@ const ConfigPanel = (() => {
     panelElement.querySelector('.gpt-config-test').addEventListener('click', testSettings);
     panelElement.querySelector('.gpt-config-test-text').addEventListener('click', testTextQuestion);
     panelElement.querySelector('.gpt-config-upload-file').addEventListener('click', handleFileUpload);
+    panelElement.querySelector('.gpt-config-create-assistant').addEventListener('click', handleCreateAssistant);
+    panelElement.querySelector('.gpt-config-show-logs').addEventListener('click', showLogViewer);
 
     const currentConfig = configStore.getConfig();
     // Show panel on first launch if not configured
     if (!currentConfig.isConfigured) {
       show();
     }
+
+    // Update assistant status display
+    updateAssistantStatus();
+    
+    // Update uploaded files list
+    updateFilesList();
 
     // Add config change listener
     configStore.addListener((newConfig) => {
@@ -379,6 +411,8 @@ const ConfigPanel = (() => {
     const shortAnswerInput = panelElement.querySelector('#shortAnswerMode');
     const autoModeInput = panelElement.querySelector('#autoMode');
     const maxParallelQuestionsInput = panelElement.querySelector('#maxParallelQuestions');
+    const useResponsesAPIInput = panelElement.querySelector('#useResponsesAPI');
+    const debugLoggingInput = panelElement.querySelector('#debugLogging');
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
@@ -387,6 +421,12 @@ const ConfigPanel = (() => {
     if (shortAnswerInput) shortAnswerInput.checked = Boolean(config.shortAnswerMode);
     if (autoModeInput) autoModeInput.checked = Boolean(config.autoMode);
     if (maxParallelQuestionsInput) maxParallelQuestionsInput.value = Number(config.maxParallelQuestions || 10);
+    if (useResponsesAPIInput) useResponsesAPIInput.checked = Boolean(config.useResponsesAPI);
+    if (debugLoggingInput) debugLoggingInput.checked = config.debugLogging !== false;
+    
+    // Update status displays
+    updateAssistantStatus();
+    updateFilesList();
   };
 
   // Validate API key
@@ -405,6 +445,8 @@ const ConfigPanel = (() => {
     const shortAnswerMode = panelElement.querySelector('#shortAnswerMode').checked;
     const autoMode = panelElement.querySelector('#autoMode').checked;
     const maxParallelQuestions = Number(panelElement.querySelector('#maxParallelQuestions').value || 10);
+    const useResponsesAPI = panelElement.querySelector('#useResponsesAPI').checked;
+    const debugLogging = panelElement.querySelector('#debugLogging').checked;
 
     // Only set isConfigured to true if API key is valid
     if (!isValidApiKey(apiKey)) {
@@ -420,10 +462,13 @@ const ConfigPanel = (() => {
       shortAnswerMode,
       autoMode,
       maxParallelQuestions,
+      useResponsesAPI,
+      debugLogging,
       isConfigured: true
     };
 
     configStore.update(newConfig);
+    Logger.info('CONFIG', 'Settings saved', newConfig);
     hide();
   };
 
@@ -431,7 +476,6 @@ const ConfigPanel = (() => {
   const handleFileUpload = async () => {
     const fileInput = panelElement.querySelector('#fileUpload');
     const uploadBtn = panelElement.querySelector('.gpt-config-upload-file');
-    const fileListDiv = panelElement.querySelector('#uploadedFilesList');
     
     if (!fileInput.files || fileInput.files.length === 0) {
       alert('Kérlek válassz egy fájlt!');
@@ -450,24 +494,25 @@ const ConfigPanel = (() => {
         try {
           const content = e.target.result;
           
-          // Upload the file
-          const result = await fileUploadHelpers.uploadFile({
+          Logger.info('UI', 'Starting file upload', { filename: file.name, size: file.size });
+          
+          // Upload the file using document manager
+          const result = await documentManager.uploadFile({
             filename: file.name,
             content: content
           });
           
           // Update UI
-          const fileItem = document.createElement('div');
-          fileItem.style.cssText = 'padding: 2px; background: rgba(46, 204, 113, 0.1); margin: 2px 0; border-radius: 2px;';
-          fileItem.textContent = `✓ ${file.name} (${result.id.substring(0, 12)}...)`;
-          fileListDiv.appendChild(fileItem);
+          updateFilesList();
+          updateAssistantStatus();
           
           // Clear input
           fileInput.value = '';
           
-          alert(`Fájl sikeresen feltöltve!\nID: ${result.id}\n\nHasználd a konzolt az asszisztens létrehozásához:\nMGPT_createAssistant({ name: 'Asszisztens', instructions: '...', fileIds: ['${result.id}'] })`);
+          alert(`Fájl sikeresen feltöltve!\n\nFájl: ${file.name}\nID: ${result.id}\n\nMost hozz létre egy asszisztenst a "Asszisztens Létrehozása" gombbal, hogy használni tudd a fájlt.`);
+          
         } catch (error) {
-          console.error('File upload error:', error);
+          Logger.error('UI', 'File upload failed', error);
           alert('Hiba a fájl feltöltése során: ' + error.message);
         } finally {
           uploadBtn.disabled = false;
@@ -485,11 +530,235 @@ const ConfigPanel = (() => {
       reader.readAsDataURL(file);
       
     } catch (error) {
-      console.error('File upload error:', error);
+      Logger.error('UI', 'File upload error', error);
       alert('Hiba: ' + error.message);
       uploadBtn.disabled = false;
       uploadBtn.textContent = 'Feltöltés';
     }
+  };
+
+  // Update uploaded files list display
+  const updateFilesList = () => {
+    const fileListDiv = panelElement?.querySelector('#uploadedFilesList');
+    if (!fileListDiv) return;
+
+    const files = documentManager.listFiles();
+    
+    if (files.length === 0) {
+      fileListDiv.innerHTML = '<div style="color: #888;">Nincs feltöltött fájl</div>';
+      return;
+    }
+
+    fileListDiv.innerHTML = files.map(file => `
+      <div style="padding: 2px; background: rgba(46, 204, 113, 0.1); margin: 2px 0; border-radius: 2px; display: flex; justify-content: space-between; align-items: center;">
+        <span>✓ ${file.filename}</span>
+        <button onclick="window.deleteFile('${file.id}')" style="background: #dc3545; color: white; border: none; padding: 1px 4px; border-radius: 2px; cursor: pointer; font-size: 8px;">X</button>
+      </div>
+    `).join('');
+  };
+
+  // Global delete file function
+  window.deleteFile = async (fileId) => {
+    if (!confirm('Biztosan törölni szeretnéd ezt a fájlt?')) return;
+    
+    try {
+      await documentManager.deleteFile(fileId);
+      updateFilesList();
+      updateAssistantStatus();
+      Logger.info('UI', 'File deleted', { fileId });
+    } catch (error) {
+      Logger.error('UI', 'File deletion failed', error);
+      alert('Hiba a fájl törlésekor: ' + error.message);
+    }
+  };
+
+  // Update assistant status display
+  const updateAssistantStatus = () => {
+    const statusDiv = panelElement?.querySelector('#assistantStatus');
+    if (!statusDiv) return;
+
+    const status = documentManager.getAssistantStatus();
+    const config = configStore.getConfig();
+
+    statusDiv.innerHTML = `
+      <div style="margin-bottom: 2px;">
+        <strong>Asszisztens:</strong> ${status.hasAssistant ? '✅ Aktív' : '❌ Nincs'}
+      </div>
+      ${status.hasAssistant ? `<div style="margin-bottom: 2px;"><strong>ID:</strong> ${status.assistantId.substring(0, 20)}...</div>` : ''}
+      <div style="margin-bottom: 2px;">
+        <strong>Fájlok:</strong> ${status.fileCount} db
+      </div>
+      <div style="margin-bottom: 2px;">
+        <strong>Responses API:</strong> ${config.useResponsesAPI ? '✅ Bekapcsolva' : '❌ Kikapcsolva'}
+      </div>
+      ${config.useResponsesAPI && !status.hasAssistant ? '<div style="color: #dc3545; font-weight: bold;">⚠️ Hozz létre asszisztenst!</div>' : ''}
+    `;
+  };
+
+  // Handle assistant creation
+  const handleCreateAssistant = async () => {
+    const createBtn = panelElement.querySelector('.gpt-config-create-assistant');
+    const files = documentManager.listFiles();
+    
+    if (files.length === 0) {
+      alert('Először tölts fel fájlokat!');
+      return;
+    }
+
+    createBtn.disabled = true;
+    createBtn.textContent = 'Létrehozás...';
+    
+    try {
+      const fileIds = files.map(f => f.id);
+      
+      await documentManager.createAssistantWithFiles({
+        name: 'MGPT Tanulási Asszisztens',
+        instructions: 'Te egy hasznos tanulási asszisztens vagy. Használd a feltöltött tananyagokat, hogy pontos válaszokat adj az akadémiai kérdésekre. Mindig a feltöltött dokumentumok alapján válaszolj.',
+        fileIds
+      });
+      
+      updateAssistantStatus();
+      
+      alert(`Asszisztens sikeresen létrehozva ${fileIds.length} fájllal!\n\nMost már bekapcsolhatod a "Használd a Responses API-t" opciót, és a kvíz kérdések automatikusan a feltöltött fájlok kontextusával lesznek megválaszolva.`);
+      
+    } catch (error) {
+      Logger.error('UI', 'Assistant creation failed', error);
+      alert('Hiba az asszisztens létrehozásakor: ' + error.message);
+    } finally {
+      createBtn.disabled = false;
+      createBtn.textContent = 'Asszisztens Létrehozása';
+    }
+  };
+
+  // Show log viewer
+  const showLogViewer = () => {
+    const logs = Logger.getLogs();
+    
+    // Create log viewer window
+    const logWindow = document.createElement('div');
+    logWindow.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 800px;
+      height: 80%;
+      background: white;
+      border: 2px solid #333;
+      border-radius: 8px;
+      z-index: 2147483648;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    `;
+    
+    logWindow.innerHTML = `
+      <div style="padding: 10px; background: #333; color: white; display: flex; justify-content: space-between; align-items: center; border-radius: 6px 6px 0 0;">
+        <h3 style="margin: 0; font-size: 16px;">📜 MGPT Naplók (${logs.length})</h3>
+        <div>
+          <button id="clearLogs" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-right: 5px;">Törlés</button>
+          <button id="exportLogs" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-right: 5px;">Exportálás</button>
+          <button id="closeLogs" style="background: #6c757d; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Bezárás</button>
+        </div>
+      </div>
+      <div style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+        <label style="margin-right: 10px;">
+          <input type="checkbox" id="filterDebug" checked> DEBUG
+        </label>
+        <label style="margin-right: 10px;">
+          <input type="checkbox" id="filterInfo" checked> INFO
+        </label>
+        <label style="margin-right: 10px;">
+          <input type="checkbox" id="filterWarn" checked> WARN
+        </label>
+        <label style="margin-right: 10px;">
+          <input type="checkbox" id="filterError" checked> ERROR
+        </label>
+      </div>
+      <div id="logContent" style="flex: 1; overflow-y: auto; padding: 10px; background: #f8f9fa; font-family: monospace; font-size: 11px;"></div>
+    `;
+    
+    document.body.appendChild(logWindow);
+    
+    // Render logs
+    const renderLogs = () => {
+      const debugFilter = logWindow.querySelector('#filterDebug').checked;
+      const infoFilter = logWindow.querySelector('#filterInfo').checked;
+      const warnFilter = logWindow.querySelector('#filterWarn').checked;
+      const errorFilter = logWindow.querySelector('#filterError').checked;
+      
+      const filteredLogs = Logger.getLogs().filter(log => {
+        if (log.level === 'DEBUG' && !debugFilter) return false;
+        if (log.level === 'INFO' && !infoFilter) return false;
+        if (log.level === 'WARN' && !warnFilter) return false;
+        if (log.level === 'ERROR' && !errorFilter) return false;
+        return true;
+      });
+      
+      const logContent = logWindow.querySelector('#logContent');
+      logContent.innerHTML = filteredLogs.map(log => {
+        const color = {
+          'DEBUG': '#888',
+          'INFO': '#0066cc',
+          'WARN': '#ff9800',
+          'ERROR': '#dc3545'
+        }[log.level] || '#000';
+        
+        return `
+          <div style="margin-bottom: 8px; padding: 6px; background: white; border-left: 3px solid ${color}; border-radius: 3px;">
+            <div style="font-weight: bold; color: ${color};">
+              [${log.timestamp}] [${log.level}] [${log.category}]
+            </div>
+            <div style="margin-top: 2px;">${log.message}</div>
+            ${log.data ? `<pre style="margin: 4px 0 0 0; padding: 4px; background: #f0f0f0; border-radius: 2px; font-size: 10px; overflow-x: auto;">${JSON.stringify(log.data, null, 2)}</pre>` : ''}
+          </div>
+        `;
+      }).join('');
+      
+      // Auto-scroll to bottom
+      logContent.scrollTop = logContent.scrollHeight;
+    };
+    
+    renderLogs();
+    
+    // Event listeners
+    logWindow.querySelector('#closeLogs').addEventListener('click', () => {
+      document.body.removeChild(logWindow);
+    });
+    
+    logWindow.querySelector('#clearLogs').addEventListener('click', () => {
+      if (confirm('Biztosan törölni szeretnéd az összes naplót?')) {
+        Logger.clearLogs();
+        renderLogs();
+      }
+    });
+    
+    logWindow.querySelector('#exportLogs').addEventListener('click', () => {
+      const logsJson = Logger.exportLogs();
+      const blob = new Blob([logsJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mgpt-logs-${new Date().toISOString()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    
+    logWindow.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+      checkbox.addEventListener('change', renderLogs);
+    });
+    
+    // Add real-time log updates
+    const logListener = () => renderLogs();
+    Logger.addListener(logListener);
+    
+    // Clean up listener when window closes
+    const originalClose = logWindow.querySelector('#closeLogs').onclick;
+    logWindow.querySelector('#closeLogs').onclick = () => {
+      Logger.removeListener(logListener);
+      originalClose();
+    };
   };
 
   // Perform a test GPT request with the currently entered values (without requiring save)
