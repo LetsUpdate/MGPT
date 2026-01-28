@@ -25,6 +25,15 @@ Részletes lépésről-lépésre útmutató (menü, vágólap, API kulcs beszerz
 
 ## Funkciók
 
+### 🤖 ChatGPT Responses API & Fájl Feltöltés
+
+MGPT támogatja a legújabb ChatGPT Responses API-t fejlett funkciókkal:
+- **Fájl feltöltés** - Tölts fel PDF-eket és szöveges dokumentumokat a pontosabb válaszokért
+- **Thinking modellek** - o1, o1-mini, o3 modellek gondolkodási folyamattal
+- **Asszisztens mód** - Thread-alapú beszélgetések kontextussal
+
+Részletes leírás: [docs/RESPONSES_API.md](docs/RESPONSES_API.md)
+
 ### ⌨️ Rövid Válasz Mód (Short Answer Mode)
 
 Gyors shortcut-tal (**Cmd/Ctrl+Shift+S**) kapcsolható rövid válasz mód TEXT/MULTIPLE_TEXT kérdésekhez. A ChatGPT nagyon tömör, 3-5 szavas válaszokat ad. Vizuális jelző mutatja ha aktív.
