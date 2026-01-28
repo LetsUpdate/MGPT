@@ -38,6 +38,17 @@ MGPT támogatja a legújabb ChatGPT Responses API-t fejlett funkciókkal:
 
 Részletes leírás: [docs/RESPONSES_API.md](docs/RESPONSES_API.md)
 
+**📖 Teljes Használati Útmutató:**
+- [USAGE_GUIDE.md](docs/USAGE_GUIDE.md) - Responses API teljes útmutató (document management, logging, debugging)
+- [MODEL_RECOMMENDATIONS.md](docs/MODEL_RECOMMENDATIONS.md) - Modell választási útmutató akadémiai kérdésekhez
+
+**Új Funkciók:**
+- ✅ **Automatikus kvíz megoldás** feltöltött fájlokkal
+- ✅ **Dokument kezelés** UI (feltöltés, törlés, megtekintés)
+- ✅ **Átfogó naplózás** (debug logging, log viewer)
+- ✅ **Kontextus ellenőrzés** (láthatod, hogy a ChatGPT használja-e a fájljaidat)
+- ✅ **Thinking modellek** támogatása (o1, o1-mini, o3)
+
 ### ⌨️ Rövid Válasz Mód (Short Answer Mode)
 
 Gyors shortcut-tal (**Cmd/Ctrl+Shift+S**) kapcsolható rövid válasz mód TEXT/MULTIPLE_TEXT kérdésekhez. A ChatGPT nagyon tömör, 3-5 szavas válaszokat ad. Vizuális jelző mutatja ha aktív.
