@@ -49,7 +49,7 @@ class ChatGPTClient {
             // Chat completions endpoint - uses messages format
             const modelName = String(model || '').toLowerCase();
             // Some models don't support system role (o1, o3, mini variants)
-            const modelDisallowsSystem = /mini|^o1|^o3|^o4/.test(modelName);
+            const modelDisallowsSystem = /mini|^o1|^o3/.test(modelName);
 
             if (modelDisallowsSystem || !systemPrompt) {
                 // Combine system and user prompt for models without system role support

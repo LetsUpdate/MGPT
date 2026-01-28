@@ -365,7 +365,9 @@ const ConfigPanel = (() => {
 
   // Validate API key
   const isValidApiKey = (key) => {
-    return key && key.trim().length >= 32; // Minimum length for API key
+    // OpenAI keys start with 'sk-' and are typically 51+ characters
+    // Allow shorter keys for custom/self-hosted endpoints
+    return key && key.trim().length >= 20;
   };
 
   // Save settings

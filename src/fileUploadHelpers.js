@@ -33,17 +33,26 @@ async function uploadFile({ filename, content }) {
     try {
         const client = initResponsesClient();
         
-        // Detect if content is base64
-        const isBase64 = content.length > 100 && /^[A-Za-z0-9+/=]+$/.test(content.substring(0, 100));
+        // Better base64 detection - check if already has data: prefix or looks like base64
+        let processedContent = content;
         
-        if (isBase64 && !content.startsWith('data:')) {
-            // Add data URL prefix for PDF/binary
-            content = `data:application/octet-stream;base64,${content}`;
+        // If it already has data: prefix, use as-is
+        if (!content.startsWith('data:')) {
+            // Check if it looks like base64 (long string with only valid base64 chars and proper padding)
+            const isLikelyBase64 = content.length > 100 && 
+                                   /^[A-Za-z0-9+/]*={0,2}$/.test(content) &&
+                                   content.length % 4 === 0;
+            
+            if (isLikelyBase64) {
+                // Add data URL prefix for binary content
+                processedContent = `data:application/octet-stream;base64,${content}`;
+            }
+            // Otherwise treat as plain text (no modification needed)
         }
         
         const result = await client.uploadFile({
             filename,
-            content,
+            content: processedContent,
             purpose: 'assistants'
         });
         

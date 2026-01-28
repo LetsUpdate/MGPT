@@ -103,7 +103,7 @@ class GPTManager {
             console.warn('MULTIPLE_TEXT requires answerFieldsCount >= 1, defaulting to 1');
         }
 
-        // Construct simplified prompt - most instructions are now in system prompt
+        // Construct prompt with question and optional context
         let fullPrompt = question;
         
         // Add short answer instruction for TEXT/MULTIPLE_TEXT types
@@ -158,7 +158,7 @@ class GPTManager {
                 // do not support the 'system' role. Detect common mini/completion models and
                 // if detected, send a single 'user' message that contains the system prompt + prompt.
                 const modelName = String(config.model || '').toLowerCase();
-                const modelDisallowsSystem = /mini|^o1|^o4/.test(modelName);
+                const modelDisallowsSystem = /mini|^o1|^o3/.test(modelName);
 
                 if (modelDisallowsSystem) {
                     requestBody.messages = [
