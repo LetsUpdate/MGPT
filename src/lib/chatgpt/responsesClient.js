@@ -8,9 +8,12 @@ class ResponsesAPIClient {
     constructor(config = {}) {
         this.apiKey = config.apiKey || '';
         this.baseUrl = config.baseUrl || 'https://api.openai.com/v1';
-        this.model = config.model || 'o1-mini';
+        this.model = config.model || 'gpt-4o';
         this.assistantId = null;
         this.threadId = null;
+        
+        // Models compatible with Assistants API
+        this.assistantCompatibleModels = ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-5', 'gpt-5.2'];
     }
 
     /**
@@ -20,6 +23,25 @@ class ResponsesAPIClient {
         if (config.apiKey !== undefined) this.apiKey = config.apiKey;
         if (config.baseUrl !== undefined) this.baseUrl = config.baseUrl;
         if (config.model !== undefined) this.model = config.model;
+    }
+    
+    /**
+     * Get a model compatible with Assistants API
+     * @returns {string} Compatible model name
+     */
+    getAssistantCompatibleModel() {
+        // Check if current model is compatible
+        const isCompatible = this.assistantCompatibleModels.some(compatibleModel => 
+            this.model.startsWith(compatibleModel)
+        );
+        
+        if (isCompatible) {
+            return this.model;
+        }
+        
+        // Fallback to gpt-4o if current model is not compatible (e.g., o1, o1-mini, o3)
+        console.warn(`[ResponsesAPIClient] Model "${this.model}" is not compatible with Assistants API. Using fallback: gpt-4o`);
+        return 'gpt-4o';
     }
 
     /**
@@ -134,8 +156,11 @@ class ResponsesAPIClient {
             vectorStoreId = await this._createVectorStore(fileIds);
         }
 
+        // Use assistant-compatible model
+        const assistantModel = this.getAssistantCompatibleModel();
+
         const requestBody = {
-            model: this.model,
+            model: assistantModel,
             name,
             instructions,
             tools: tools.length > 0 ? tools : [{ type: 'file_search' }],

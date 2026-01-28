@@ -106,13 +106,18 @@ const ConfigPanel = (() => {
         <div class="gpt-config-field">
           <label for="model">Model:</label>
           <select id="model">
-            <option value="o1-mini" ${currentConfig.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors gondolkodó)</option>
-            <option value="o1" ${currentConfig.model === 'o1' ? 'selected' : ''}>o1 (Fejlett gondolkodó)</option>
-            <option value="o3" ${currentConfig.model === 'o3' ? 'selected' : ''}>o3 (Legújabb gondolkodó)</option>
-            <option value="gpt-4o" ${currentConfig.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (Legfejlettebb)</option>
-            <option value="gpt-5" ${currentConfig.model === 'gpt-5' ? 'selected' : ''}>GPT-5 (Haladó)</option>
+            <optgroup label="🧠 Gondolkodó Modellek (Chat Completions csak)">
+              <option value="o1-mini" ${currentConfig.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors gondolkodó)</option>
+              <option value="o1" ${currentConfig.model === 'o1' ? 'selected' : ''}>o1 (Fejlett gondolkodó)</option>
+              <option value="o3" ${currentConfig.model === 'o3' ? 'selected' : ''}>o3 (Legújabb gondolkodó)</option>
+            </optgroup>
+            <optgroup label="⚡ Standard Modellek (Assistants API kompatibilis)">
+              <option value="gpt-4o" ${currentConfig.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (Legfejlettebb)</option>
+              <option value="gpt-5" ${currentConfig.model === 'gpt-5' ? 'selected' : ''}>GPT-5 (Haladó)</option>
+              <option value="gpt-5.2" ${currentConfig.model === 'gpt-5.2' ? 'selected' : ''}>GPT-5.2 (Legújabb)</option>
+            </optgroup>
           </select>
-          <small>Gondolkodó modellek (o1, o3) lassabbak, de pontosabbak.</small>
+          <small>⚠️ Gondolkodó modellek (o1, o3) NEM használhatók Assistants API-val (Responses API).</small>
         </div>
         <div class="gpt-config-field">
           <label for="apiUrl">API URL:</label>
@@ -140,6 +145,9 @@ const ConfigPanel = (() => {
           <div style="font-size: 9px; font-weight: bold; margin-bottom: 3px;">📊 Asszisztens Státusz:</div>
           <div id="assistantStatus" style="font-size: 9px;"></div>
           <button class="gpt-config-create-assistant" style="width: 100%; padding: 4px; margin-top: 4px; font-size: 9px; background: #28a745;">Asszisztens Létrehozása</button>
+          <small id="gpt-assistant-model-warning" style="display: none; color: #d97706; font-size: 8px; margin-top: 2px;">
+            ⚠️ Gondolkodó modellek (o1, o3) nem használhatók Assistants API-val. GPT-4o lesz használva.
+          </small>
         </div>
         
         <div class="gpt-config-field">
@@ -416,6 +424,23 @@ const ConfigPanel = (() => {
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
+    
+    // Update assistant model warning based on selected model
+    const updateAssistantWarning = () => {
+      const selectedModel = modelSelect?.value || config.model || '';
+      const warningElement = panelElement.querySelector('#gpt-assistant-model-warning');
+      const isThinkingModel = /^o[13](-mini)?$/.test(selectedModel);
+      
+      if (warningElement) {
+        warningElement.style.display = isThinkingModel ? 'block' : 'none';
+      }
+    };
+    
+    // Listen for model changes
+    if (modelSelect) {
+      modelSelect.addEventListener('change', updateAssistantWarning);
+      updateAssistantWarning(); // Initial check
+    }
     if (apiUrlInput) apiUrlInput.value = config.apiUrl || '';
     if (copyResultsInput) copyResultsInput.checked = Boolean(config.copyResoults);
     if (shortAnswerInput) shortAnswerInput.checked = Boolean(config.shortAnswerMode);
