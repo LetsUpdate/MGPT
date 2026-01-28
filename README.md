@@ -2,9 +2,11 @@
 
 Az **MGPT** egy AI-alapú tanulást segítő eszköz a Moodle platformhoz. A program célja, hogy mesterséges intelligencia segítségével támogassa a diákok tanulmányi előrehaladását és segítse a tananyag mélyebb megértését.
 
+**⚙️ Tampermonkey Kompatibilitás:** ✅ Igen! Ez egy **Tampermonkey userscript** - specifikusan Tampermonkey-hoz készült. Minden funkció (beleértve a fájl feltöltést is) GM_xmlhttpRequest-et használ és teljesen kompatibilis. [Részletek →](docs/TAMPERMONKEY_COMPATIBILITY.md)
+
 *Dobj egy csillagot hogy tudjak vele menőzni!* [⭐KaptamEgyCsillagot!!!⭐](https://coub.com/view/1uvg42)
 
-Telepítési útmutató:
+## 📦 Telepítési útmutató
 1. Első lépésként telepítsd a böngésződbe a [Tampermonkey](https://www.tampermonkey.net/) kiegészítőt, amely lehetővé teszi a JavaScript alapú szkriptek futtatását a böngésződben.
 2. A szkript telepítéséhez [kattints ide](https://github.com/LetsUpdate/MGPT/releases/latest/download/MGPT.user.js). Ezután a szkript automatikusan bekerül a Tampermonkey kiegészítőbe, és már el is kezdheted használni!
 
@@ -41,6 +43,7 @@ Részletes leírás: [docs/RESPONSES_API.md](docs/RESPONSES_API.md)
 **📖 Teljes Használati Útmutató:**
 - [USAGE_GUIDE.md](docs/USAGE_GUIDE.md) - Responses API teljes útmutató (document management, logging, debugging)
 - [MODEL_RECOMMENDATIONS.md](docs/MODEL_RECOMMENDATIONS.md) - Modell választási útmutató akadémiai kérdésekhez
+- [TAMPERMONKEY_COMPATIBILITY.md](docs/TAMPERMONKEY_COMPATIBILITY.md) - **Tampermonkey kompatibilitás részletek** ⚙️
 
 **Új Funkciók:**
 - ✅ **Automatikus kvíz megoldás** feltöltött fájlokkal
