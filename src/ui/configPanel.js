@@ -1,5 +1,6 @@
 // Configuration Panel Module
 const configStore = require('../configStore');
+const fileUploadHelpers = require('../fileUploadHelpers');
 
 const ConfigPanel = (() => {
   const usf = unsafeWindow;
@@ -103,15 +104,32 @@ const ConfigPanel = (() => {
         <div class="gpt-config-field">
           <label for="model">Model:</label>
           <select id="model">
-            <option value="o1-mini" ${currentConfig.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors & Költséghatékony)</option>
+            <option value="o1-mini" ${currentConfig.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors gondolkodó)</option>
+            <option value="o1" ${currentConfig.model === 'o1' ? 'selected' : ''}>o1 (Fejlett gondolkodó)</option>
+            <option value="o3" ${currentConfig.model === 'o3' ? 'selected' : ''}>o3 (Legújabb gondolkodó)</option>
             <option value="gpt-4o" ${currentConfig.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (Legfejlettebb)</option>
             <option value="gpt-5" ${currentConfig.model === 'gpt-5' ? 'selected' : ''}>GPT-5 (Haladó)</option>
           </select>
+          <small>Gondolkodó modellek (o1, o3) lassabbak, de pontosabbak.</small>
         </div>
         <div class="gpt-config-field">
           <label for="apiUrl">API URL:</label>
           <input type="text" id="apiUrl" value="${currentConfig.apiUrl}">
+          <small>Csak az API kulcs kell az OpenAI-hoz, semmi más beállítás!</small>
         </div>
+        
+        <hr style="margin: 8px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);">
+        
+        <div class="gpt-config-field">
+          <label>📁 Fájl Feltöltés (Responses API):</label>
+          <input type="file" id="fileUpload" accept=".pdf,.txt,.doc,.docx" style="font-size: 10px; margin: 4px 0;">
+          <button class="gpt-config-upload-file" style="width: 100%; padding: 4px; margin-top: 4px; font-size: 10px;">Feltöltés</button>
+          <small>PDF, TXT fájlok feltöltése a pontosabb válaszokhoz.</small>
+          <div id="uploadedFilesList" style="margin-top: 4px; font-size: 9px; max-height: 60px; overflow-y: auto;"></div>
+        </div>
+        
+        <hr style="margin: 8px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);">
+        
         <div class="gpt-config-field">
           <label for="copyResoults">Másolat vágólapra (copyResoults):</label>
           <input type="checkbox" id="copyResoults" ${currentConfig.copyResoults ? 'checked' : ''}>
@@ -229,7 +247,8 @@ const ConfigPanel = (() => {
       }
       .gpt-config-save,
       .gpt-config-test,
-      .gpt-config-test-text {
+      .gpt-config-test-text,
+      .gpt-config-upload-file {
         width: 100%;
         padding: 6px;
         background: #007bff;
@@ -240,10 +259,16 @@ const ConfigPanel = (() => {
         font-size: 11px;
         margin-top: 4px;
       }
+      .gpt-config-upload-file {
+        background: #28a745;
+      }
       .gpt-config-save:hover,
       .gpt-config-test:hover,
       .gpt-config-test-text:hover {
         background: #0056b3;
+      }
+      .gpt-config-upload-file:hover {
+        background: #218838;
       }
     `;
     document.head.appendChild(styles);
@@ -282,6 +307,7 @@ const ConfigPanel = (() => {
     panelElement.querySelector('.gpt-config-save').addEventListener('click', saveSettings);
     panelElement.querySelector('.gpt-config-test').addEventListener('click', testSettings);
     panelElement.querySelector('.gpt-config-test-text').addEventListener('click', testTextQuestion);
+    panelElement.querySelector('.gpt-config-upload-file').addEventListener('click', handleFileUpload);
 
     const currentConfig = configStore.getConfig();
     // Show panel on first launch if not configured
@@ -399,6 +425,71 @@ const ConfigPanel = (() => {
 
     configStore.update(newConfig);
     hide();
+  };
+
+  // Handle file upload
+  const handleFileUpload = async () => {
+    const fileInput = panelElement.querySelector('#fileUpload');
+    const uploadBtn = panelElement.querySelector('.gpt-config-upload-file');
+    const fileListDiv = panelElement.querySelector('#uploadedFilesList');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+      alert('Kérlek válassz egy fájlt!');
+      return;
+    }
+    
+    const file = fileInput.files[0];
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Feltöltés...';
+    
+    try {
+      // Read file as base64
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const content = e.target.result;
+          
+          // Upload the file
+          const result = await fileUploadHelpers.uploadFile({
+            filename: file.name,
+            content: content
+          });
+          
+          // Update UI
+          const fileItem = document.createElement('div');
+          fileItem.style.cssText = 'padding: 2px; background: rgba(46, 204, 113, 0.1); margin: 2px 0; border-radius: 2px;';
+          fileItem.textContent = `✓ ${file.name} (${result.id.substring(0, 12)}...)`;
+          fileListDiv.appendChild(fileItem);
+          
+          // Clear input
+          fileInput.value = '';
+          
+          alert(`Fájl sikeresen feltöltve!\nID: ${result.id}\n\nHasználd a konzolt az asszisztens létrehozásához:\nMGPT_createAssistant({ name: 'Asszisztens', instructions: '...', fileIds: ['${result.id}'] })`);
+        } catch (error) {
+          console.error('File upload error:', error);
+          alert('Hiba a fájl feltöltése során: ' + error.message);
+        } finally {
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = 'Feltöltés';
+        }
+      };
+      
+      reader.onerror = () => {
+        alert('Hiba a fájl olvasása során');
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Feltöltés';
+      };
+      
+      // Read as data URL (includes base64)
+      reader.readAsDataURL(file);
+      
+    } catch (error) {
+      console.error('File upload error:', error);
+      alert('Hiba: ' + error.message);
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'Feltöltés';
+    }
   };
 
   // Perform a test GPT request with the currently entered values (without requiring save)
