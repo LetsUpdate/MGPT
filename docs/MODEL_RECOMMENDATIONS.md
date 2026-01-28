@@ -49,6 +49,66 @@ This guide helps you choose the best OpenAI model for answering academic questio
 - **Speed:** Fast (2-3 seconds)
 - **Accuracy:** Very Good (88-92%)
 - **Cost:** Moderate
+- **Thinking:** No thinking process shown
+- **Assistants API:** ✅ **Compatible** - Can be used with file uploads
+- **Use when:**
+  - Quick answers needed
+  - Questions don't require deep reasoning
+  - Using Responses API with uploaded files
+  - Cost is a concern
+  - Standard course material questions
+
+### 5. **gpt-5** - Advanced General 🚀 POWERFUL
+- **Best for:** Advanced academic work without thinking requirement
+- **Speed:** Fast (2-4 seconds)
+- **Accuracy:** Excellent (90-94%)
+- **Cost:** Moderate to High
+- **Thinking:** No thinking process shown
+- **Assistants API:** ✅ **Compatible** - Can be used with file uploads
+- **Use when:**
+  - Need better accuracy than gpt-4o
+  - Working with complex course materials
+  - Responses API with multiple files
+  - Advanced technical subjects
+
+### 6. **gpt-5.2** - Latest Model ⭐ NEWEST
+- **Best for:** Most current and capable general-purpose model
+- **Speed:** Fast (2-4 seconds)
+- **Accuracy:** Excellent (91-95%)
+- **Cost:** Moderate to High
+- **Thinking:** No thinking process shown
+- **Assistants API:** ✅ **Compatible** - Can be used with file uploads
+- **Use when:**
+  - Want the latest capabilities
+  - Need highest accuracy without thinking overhead
+  - Using Responses API with uploaded files
+  - Working with up-to-date information
+  - Complex multi-file contexts
+
+---
+
+## ⚠️ Important: Assistants API Compatibility
+
+**Only certain models work with the Assistants API (Responses API with files):**
+
+### ✅ Compatible Models (Can use with Assistants API):
+- **gpt-4o** - Recommended default
+- **gpt-5** - Advanced option
+- **gpt-5.2** - Latest, best capabilities ⭐
+
+### ❌ Incompatible Models (Chat Completions only):
+- **o1-mini** - Thinking model, NOT supported
+- **o1** - Thinking model, NOT supported
+- **o3** - Thinking model, NOT supported
+
+**What happens if you select an incompatible model?**
+- MGPT automatically falls back to **gpt-4o** for Assistants API
+- You'll see a warning in the console
+- The UI shows: "⚠️ Gondolkodó modellek nem használhatók Assistants API-val"
+- Everything still works, just with the fallback model
+
+**Recommendation:** If using Responses API with file uploads, choose **gpt-4o**, **gpt-5**, or **gpt-5.2** directly.
+- **Cost:** Moderate
 - **Thinking:** No explicit thinking process
 - **Use when:**
   - Writing assignments
