@@ -59,55 +59,57 @@ This guide helps you choose the best OpenAI model for answering academic questio
   - Standard course material questions
 
 ### 5. **gpt-5** - Advanced General 🚀 POWERFUL
-- **Best for:** Advanced academic work without thinking requirement
+- **Best for:** Advanced academic work without thinking requirement (Chat Completions only)
 - **Speed:** Fast (2-4 seconds)
 - **Accuracy:** Excellent (90-94%)
 - **Cost:** Moderate to High
 - **Thinking:** No thinking process shown
-- **Assistants API:** ✅ **Compatible** - Can be used with file uploads
+- **Assistants API:** ❌ **NOT Compatible** - Cannot be used with file uploads yet
 - **Use when:**
-  - Need better accuracy than gpt-4o
-  - Working with complex course materials
-  - Responses API with multiple files
+  - Need better accuracy than gpt-4o (without file uploads)
+  - Working on complex problems via Chat Completions
   - Advanced technical subjects
+  - **Note:** For file uploads, use gpt-4o instead
 
 ### 6. **gpt-5.2** - Latest Model ⭐ NEWEST
-- **Best for:** Most current and capable general-purpose model
+- **Best for:** Most current general-purpose model (Chat Completions only)
 - **Speed:** Fast (2-4 seconds)
 - **Accuracy:** Excellent (91-95%)
 - **Cost:** Moderate to High
 - **Thinking:** No thinking process shown
-- **Assistants API:** ✅ **Compatible** - Can be used with file uploads
+- **Assistants API:** ❌ **NOT Compatible** - Cannot be used with file uploads yet
 - **Use when:**
-  - Want the latest capabilities
-  - Need highest accuracy without thinking overhead
-  - Using Responses API with uploaded files
+  - Want the latest capabilities (without file uploads)
+  - Need highest accuracy via Chat Completions
   - Working with up-to-date information
+  - **Note:** For file uploads, use gpt-4o instead
   - Complex multi-file contexts
 
 ---
 
 ## ⚠️ Important: Assistants API Compatibility
 
-**Only certain models work with the Assistants API (Responses API with files):**
+**Only GPT-4 family models work with the Assistants API (Responses API with files):**
 
 ### ✅ Compatible Models (Can use with Assistants API):
-- **gpt-4o** - Recommended default
-- **gpt-5** - Advanced option
-- **gpt-5.2** - Latest, best capabilities ⭐
+- **gpt-4o** - Recommended ⭐ (fast, capable, well-supported)
+- **gpt-4-turbo** - Alternative option
+- **gpt-3.5-turbo** - Budget option
 
 ### ❌ Incompatible Models (Chat Completions only):
 - **o1-mini** - Thinking model, NOT supported
 - **o1** - Thinking model, NOT supported
 - **o3** - Thinking model, NOT supported
+- **gpt-5** - NOT supported yet
+- **gpt-5.2** - NOT supported yet
 
 **What happens if you select an incompatible model?**
 - MGPT automatically falls back to **gpt-4o** for Assistants API
-- You'll see a warning in the console
-- The UI shows: "⚠️ Gondolkodó modellek nem használhatók Assistants API-val"
-- Everything still works, just with the fallback model
+- You'll see a warning in the UI and console
+- The UI shows: "⚠️ A választott modell NEM használható Assistants API-val"
+- Everything still works, just with the fallback model (gpt-4o)
 
-**Recommendation:** If using Responses API with file uploads, choose **gpt-4o**, **gpt-5**, or **gpt-5.2** directly.
+**Recommendation:** If using Responses API with file uploads, choose **gpt-4o** directly (or gpt-4-turbo/gpt-3.5-turbo).
 - **Cost:** Moderate
 - **Thinking:** No explicit thinking process
 - **Use when:**

@@ -12,8 +12,9 @@ class ResponsesAPIClient {
         this.assistantId = null;
         this.threadId = null;
         
-        // Models compatible with Assistants API
-        this.assistantCompatibleModels = ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-5', 'gpt-5.2'];
+        // Models compatible with Assistants API (only GPT-4 family supported)
+        // GPT-5, GPT-5.2, and thinking models (o1, o3) are NOT supported
+        this.assistantCompatibleModels = ['gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-3.5-turbo'];
     }
 
     /**

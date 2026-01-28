@@ -106,18 +106,22 @@ const ConfigPanel = (() => {
         <div class="gpt-config-field">
           <label for="model">Model:</label>
           <select id="model">
-            <optgroup label="🧠 Gondolkodó Modellek (Chat Completions csak)">
+            <optgroup label="📁 Assistants API Kompatibilis (Fájlokkal használható)">
+              <option value="gpt-4o" ${currentConfig.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o ⭐ (Ajánlott fájlokkal való munkához)</option>
+              <option value="gpt-4-turbo" ${currentConfig.model === 'gpt-4-turbo' ? 'selected' : ''}>GPT-4-Turbo</option>
+              <option value="gpt-3.5-turbo" ${currentConfig.model === 'gpt-3.5-turbo' ? 'selected' : ''}>GPT-3.5-Turbo</option>
+            </optgroup>
+            <optgroup label="🧠 Gondolkodó Modellek (Csak Chat Completions)">
               <option value="o1-mini" ${currentConfig.model === 'o1-mini' ? 'selected' : ''}>o1-mini (Gyors gondolkodó)</option>
               <option value="o1" ${currentConfig.model === 'o1' ? 'selected' : ''}>o1 (Fejlett gondolkodó)</option>
               <option value="o3" ${currentConfig.model === 'o3' ? 'selected' : ''}>o3 (Legújabb gondolkodó)</option>
             </optgroup>
-            <optgroup label="⚡ Standard Modellek (Assistants API kompatibilis)">
-              <option value="gpt-4o" ${currentConfig.model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (Legfejlettebb)</option>
+            <optgroup label="⚡ Standard Modellek (Csak Chat Completions)">
               <option value="gpt-5" ${currentConfig.model === 'gpt-5' ? 'selected' : ''}>GPT-5 (Haladó)</option>
               <option value="gpt-5.2" ${currentConfig.model === 'gpt-5.2' ? 'selected' : ''}>GPT-5.2 (Legújabb)</option>
             </optgroup>
           </select>
-          <small>⚠️ Gondolkodó modellek (o1, o3) NEM használhatók Assistants API-val (Responses API).</small>
+          <small>ℹ️ Csak a GPT-4 család (gpt-4o, gpt-4-turbo, gpt-3.5-turbo) használható fájlokkal az Assistants API-ban.</small>
         </div>
         <div class="gpt-config-field">
           <label for="apiUrl">API URL:</label>
@@ -145,9 +149,7 @@ const ConfigPanel = (() => {
           <div style="font-size: 9px; font-weight: bold; margin-bottom: 3px;">📊 Asszisztens Státusz:</div>
           <div id="assistantStatus" style="font-size: 9px;"></div>
           <button class="gpt-config-create-assistant" style="width: 100%; padding: 4px; margin-top: 4px; font-size: 9px; background: #28a745;">Asszisztens Létrehozása</button>
-          <small id="gpt-assistant-model-warning" style="display: none; color: #d97706; font-size: 8px; margin-top: 2px;">
-            ⚠️ Gondolkodó modellek (o1, o3) nem használhatók Assistants API-val. GPT-4o lesz használva.
-          </small>
+          <small id="gpt-assistant-model-warning" style="display: none; color: #d97706; font-size: 8px; margin-top: 2px;"></small>
         </div>
         
         <div class="gpt-config-field">
@@ -429,10 +431,17 @@ const ConfigPanel = (() => {
     const updateAssistantWarning = () => {
       const selectedModel = modelSelect?.value || config.model || '';
       const warningElement = panelElement.querySelector('#gpt-assistant-model-warning');
-      const isThinkingModel = /^o[13](-mini)?$/.test(selectedModel);
+      
+      // Check if model is NOT compatible with Assistants API
+      // Compatible: gpt-4, gpt-4-turbo, gpt-4o, gpt-3.5-turbo
+      // NOT compatible: o1, o1-mini, o3, gpt-5, gpt-5.2
+      const isIncompatible = /^o[13](-mini)?$/.test(selectedModel) || /^gpt-5/.test(selectedModel);
       
       if (warningElement) {
-        warningElement.style.display = isThinkingModel ? 'block' : 'none';
+        warningElement.style.display = isIncompatible ? 'block' : 'none';
+        if (isIncompatible) {
+          warningElement.textContent = `⚠️ A választott modell (${selectedModel}) NEM használható Assistants API-val. Az asszisztens gpt-4o modellt fog használni helyette.`;
+        }
       }
     };
     
