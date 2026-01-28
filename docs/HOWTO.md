@@ -4,7 +4,6 @@ This guide explains:
 - How the in-page menu works
 - Clipboard behavior
 - Getting an API key
-- Running the local RAG server for development
 
 ## Menu (Config Panel)
 
@@ -45,42 +44,7 @@ You need an API-compatible endpoint and key. Options:
   - The Test Settings button allows short keys for non-OpenAI hosts.
 
 Permissions
-- The userscript requests network permission to your API host(s) via @connect. If you change to a different host, ensure it’s added to the userscript header (webpack.config.js → UserscriptPlugin headers.connect).
-
-## RAG server (local dev)
-
-MGPT ships with a simple local Retrieval-Augmented Generation (RAG) server.
-
-- Requirements: Node.js 18+
-- Location: rag-server/
-- Start (development):
-
-```bash
-cd rag-server
-npm install
-npm run dev
-```
-
-- Start (production-ish):
-
-```bash
-cd rag-server
-npm install
-npm start
-```
-
-- Default URL: http://localhost:7860
-- Endpoints:
-  - GET /health → { ok: true }
-  - POST /ingestText { id, text, chunkSize?, chunkOverlap?, metadata? }
-  - POST /ingestPdf { id, base64, ... } (auto-parses the PDF text)
-  - POST /query { question, topK? }
-
-Configuration in MGPT:
-- In the extension code, `ragEnabled` defaults to true and the default URL is http://localhost:7860.
-- You can change these in `src/configStore.js` if needed (ragServerUrl, ragTopK).
-
-Tip: The first embed call downloads a small model (all-MiniLM) and may take a bit. Subsequent requests are much faster.
+- The userscript requests network permission to your API host(s) via @connect. If you change to a different host, ensure it's added to the userscript header (webpack.config.js → UserscriptPlugin headers.connect).
 
 ## Quick flow
 
@@ -88,7 +52,6 @@ Tip: The first embed call downloads a small model (all-MiniLM) and may take a bi
 2. Open a Moodle quiz page.
 3. Open the config panel (Shift + Ctrl + H), paste your API key, choose model, and Save Settings.
 4. (Optional) Enable "copyResoults" to auto-copy results.
-5. (Dev) If you want RAG context, start the local RAG server (`npm run dev` in rag-server) and keep it running.
-6. Click a question block to ask GPT. A very subtle outline indicates progress; the outline turns softly green when done.
+5. Click a question block to ask GPT. A very subtle outline indicates progress; the outline turns softly green when done.
 
 If something fails, open the browser console for errors. You can re-test your config with the Test Settings button in the panel.

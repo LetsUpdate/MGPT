@@ -17,13 +17,6 @@ const DEFAULT_CONFIG = {
     autoMode: false,
     // Maximum parallel questions to solve automatically (when multiple questions on one page)
     maxParallelQuestions: 10,
-    // RAG query optimization
-    ragQueryOptimizeEnabled: false,
-    ragQueryMaxChars: 160,
-    // RAG settings
-    ragServerUrl: 'http://localhost:7860',
-    ragTopK: 5,
-    ragEnabled: true,
     isConfigured: false
 };
 

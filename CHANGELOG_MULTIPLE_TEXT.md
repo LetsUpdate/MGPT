@@ -102,7 +102,6 @@ A MoodleGPT mostantól képes kezelni olyan kérdéseket, ahol **egy kérdéshez
 - [x] 2 text input mezős kérdés
 - [x] 3+ text input mezős kérdés  
 - [x] Vágólapra másolás MULTIPLE_TEXT esetén
-- [x] RAG funkció MULTIPLE_TEXT esetén
 - [x] Event dispatch Moodle-nek
 
 ### Edge case-ek:
@@ -125,7 +124,6 @@ Létrehozott dokumentációk:
   - Az `answerFieldsCount` opcionális az `options` objektumban
   - Egyszerű TEXT továbbra is működik
 - ✅ Nem zavarja a RADIO/CHECKBOX/SELECT működését
-- ✅ RAG-gel kompatibilis
 - ✅ Clipboard copy funkcióval kompatibilis
 
 ## 🛡️ Failsafe Javítások

@@ -132,30 +132,6 @@ const ConfigPanel = (() => {
           <input type="number" id="maxParallelQuestions" value="${currentConfig.maxParallelQuestions || 10}" min="1" max="50" step="1">
           <small>Maximális párhuzamosan megoldható kérdések száma (alapértelmezett: 10).</small>
         </div>
-        <div class="gpt-config-field">
-          <label for="ragEnabled">RAG szerver engedélyezése:</label>
-          <input type="checkbox" id="ragEnabled" ${currentConfig.ragEnabled ? 'checked' : ''}>
-          <small>Ki/bekapcsolja a RAG szervert a válaszok javításához.</small>
-        </div>
-        <div class="gpt-config-field">
-          <label for="ragServerUrl">RAG szerver URL:</label>
-          <input type="text" id="ragServerUrl" value="${currentConfig.ragServerUrl || 'http://localhost:7860'}">
-          <small>A RAG szerver címe (alapértelmezett: http://localhost:7860).</small>
-        </div>
-        <div class="gpt-config-field">
-          <label for="ragTopK">RAG Top-K eredmények:</label>
-          <input type="number" id="ragTopK" min="1" max="20" step="1" value="${currentConfig.ragTopK || 5}">
-          <small>Hány releváns dokumentumrészletet kérjen le (alapértelmezett: 5).</small>
-        </div>
-        <div class="gpt-config-field">
-          <label for="ragQueryOptimizeEnabled">RAG lekérdezés optimalizálás:</label>
-          <input type="checkbox" id="ragQueryOptimizeEnabled" ${currentConfig.ragQueryOptimizeEnabled ? 'checked' : ''}>
-          <small>Gyors GPT-vel rövidíti/tömöríti a kérdést a RAG számára.</small>
-        </div>
-        <div class="gpt-config-field">
-          <label for="ragQueryMaxChars">RAG max karakterszám (tömörített):</label>
-          <input type="number" id="ragQueryMaxChars" min="40" max="500" step="10" value="${currentConfig.ragQueryMaxChars || 160}">
-        </div>
         <button class="gpt-config-save">Save Settings</button>
         <button class="gpt-config-test">Test Settings</button>
         <button class="gpt-config-test-text">Quick Text Test</button>
@@ -377,11 +353,6 @@ const ConfigPanel = (() => {
     const shortAnswerInput = panelElement.querySelector('#shortAnswerMode');
     const autoModeInput = panelElement.querySelector('#autoMode');
     const maxParallelQuestionsInput = panelElement.querySelector('#maxParallelQuestions');
-    const ragEnabledInput = panelElement.querySelector('#ragEnabled');
-    const ragServerUrlInput = panelElement.querySelector('#ragServerUrl');
-    const ragTopKInput = panelElement.querySelector('#ragTopK');
-    const ragOptInput = panelElement.querySelector('#ragQueryOptimizeEnabled');
-    const ragMaxCharsInput = panelElement.querySelector('#ragQueryMaxChars');
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
@@ -390,11 +361,6 @@ const ConfigPanel = (() => {
     if (shortAnswerInput) shortAnswerInput.checked = Boolean(config.shortAnswerMode);
     if (autoModeInput) autoModeInput.checked = Boolean(config.autoMode);
     if (maxParallelQuestionsInput) maxParallelQuestionsInput.value = Number(config.maxParallelQuestions || 10);
-    if (ragEnabledInput) ragEnabledInput.checked = Boolean(config.ragEnabled);
-    if (ragServerUrlInput) ragServerUrlInput.value = config.ragServerUrl || 'http://localhost:7860';
-    if (ragTopKInput) ragTopKInput.value = Number(config.ragTopK || 5);
-    if (ragOptInput) ragOptInput.checked = Boolean(config.ragQueryOptimizeEnabled);
-    if (ragMaxCharsInput) ragMaxCharsInput.value = Number(config.ragQueryMaxChars || 160);
   };
 
   // Validate API key
@@ -411,11 +377,6 @@ const ConfigPanel = (() => {
     const shortAnswerMode = panelElement.querySelector('#shortAnswerMode').checked;
     const autoMode = panelElement.querySelector('#autoMode').checked;
     const maxParallelQuestions = Number(panelElement.querySelector('#maxParallelQuestions').value || 10);
-    const ragEnabled = panelElement.querySelector('#ragEnabled').checked;
-    const ragServerUrl = panelElement.querySelector('#ragServerUrl').value;
-    const ragTopK = Number(panelElement.querySelector('#ragTopK').value || 5);
-    const ragQueryOptimizeEnabled = panelElement.querySelector('#ragQueryOptimizeEnabled').checked;
-    const ragQueryMaxChars = Number(panelElement.querySelector('#ragQueryMaxChars').value || 160);
 
     // Only set isConfigured to true if API key is valid
     if (!isValidApiKey(apiKey)) {
@@ -431,11 +392,6 @@ const ConfigPanel = (() => {
       shortAnswerMode,
       autoMode,
       maxParallelQuestions,
-      ragEnabled,
-      ragServerUrl,
-      ragTopK,
-      ragQueryOptimizeEnabled,
-      ragQueryMaxChars,
       isConfigured: true
     };
 
