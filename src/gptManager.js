@@ -2,6 +2,7 @@
 const configStore = require('./configStore');
 const scriptConfig = require('./config');
 const SystemPromptGenerator = require('./systemPromptGenerator');
+const { ChatGPTClient } = require('./lib/chatgpt');
 
 
 // Global GPT manager instance
@@ -28,6 +29,7 @@ class GPTManager {
         }
         gptManagerInstance = this;
         this.initialized = false;
+        this.chatClient = null;
     }
 
     /**
@@ -42,8 +44,17 @@ class GPTManager {
             const config = configStore.getConfig();
             if (!config.apiKey) {
                 console.warn('GPT API key not set. Please configure in settings.');
-            }else
+            } else {
+                // Initialize ChatGPT client with config
+                this.chatClient = new ChatGPTClient({
+                    apiKey: config.apiKey,
+                    apiUrl: config.apiUrl,
+                    model: config.model,
+                    temperature: config.temperature,
+                    maxTokens: config.maxTokens
+                });
                 this.initialized = true;
+            }
         } catch (error) {
             console.error('Failed to initialize GPT Manager:', error);
             throw error;

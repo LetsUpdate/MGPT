@@ -2,7 +2,8 @@
 const { LookForCaptcha } = require('./captchaSolver');
 const {PlaceLogo} = require('./UImodul');
  */
-const configPanel = require("./configPanel");
+// Use modular UI component
+const configPanel = require("./ui/configPanel");
 const configStore = require("./configStore");
 const questionSolver = require("./questionSolver");
 
