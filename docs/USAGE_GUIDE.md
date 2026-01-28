@@ -205,6 +205,8 @@ See [MODEL_RECOMMENDATIONS.md](MODEL_RECOMMENDATIONS.md) for detailed guide.
 
 ## 🔍 Troubleshooting
 
+For detailed file upload troubleshooting, see [FILE_UPLOAD_TROUBLESHOOTING.md](FILE_UPLOAD_TROUBLESHOOTING.md)
+
 ### Issue: Files uploaded but not being used
 
 **Check:**
