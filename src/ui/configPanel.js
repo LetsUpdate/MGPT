@@ -5,7 +5,7 @@ const ConfigPanel = (() => {
   const usf = unsafeWindow;
   
   // Constants
-  const KEY_COMBO_SHOW = 'Alt+Shift+C'; // Key combination to show/hide panel
+  const KEY_COMBO_SHOW = 'Ctrl+Shift+H'; // Key combination to show/hide panel (Cmd+Shift+H on Mac)
 
   // State
   let isVisible = false;

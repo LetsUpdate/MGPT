@@ -19,6 +19,10 @@ koszi :P
 
 ## Hogyan használd?
 
+### ⌨️ Menü megnyitása
+
+A konfigurációs menü megnyitásához/bezárásához nyomd meg: **Ctrl+Shift+H** (Mac-en: **Cmd+Shift+H**)
+
 Részletes lépésről-lépésre útmutató (menü, vágólap, API kulcs beszerzése):(gpt generated)
 
 - Lásd: [docs/HOWTO.md](docs/HOWTO.md)
