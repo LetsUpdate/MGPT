@@ -434,6 +434,19 @@ class ResponsesAPIClient {
     }
 
     /**
+     * Strip citation markers from text
+     * Removes OpenAI citation markers like 【18:1†filename.csv】
+     * @private
+     */
+    _stripCitationMarkers(text) {
+        if (!text) return text;
+        
+        // Remove citation markers in format 【...】
+        // This includes patterns like 【18:1†Korszar2 kérdések - Munkalap1 másolata.csv】
+        return text.replace(/【[^】]*】/g, '').trim();
+    }
+
+    /**
      * Get messages from thread
      * @private
      */
@@ -461,7 +474,9 @@ class ResponsesAPIClient {
                             throw new Error('No assistant response found');
                         }
 
-                        const content = assistantMessage.content[0]?.text?.value || '';
+                        // Get content and strip citation markers
+                        let content = assistantMessage.content[0]?.text?.value || '';
+                        content = this._stripCitationMarkers(content);
                         
                         // Extract annotations (file citations) if present
                         const annotations = assistantMessage.content[0]?.text?.annotations || [];
