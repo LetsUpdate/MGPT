@@ -646,15 +646,29 @@ class QuestionSolver {
                     const answersData = questionData.data.answers || [];
                     const toIndex = (ans) => {
                         // Convert a single answer (number or text) to index within this question
-                        if (ans === null || ans === undefined) return -1;
+                        console.log('toIndex: Converting answer:', ans, 'type:', typeof ans);
+                        
+                        if (ans === null || ans === undefined) {
+                            console.log('toIndex: Answer is null/undefined, returning -1');
+                            return -1;
+                        }
+                        
                         // number-like
                         if (!isNaN(ans)) {
                             const idx = parseInt(ans, 10);
-                            return (idx >= 0 && idx < elems.length) ? idx : -1;
+                            const valid = (idx >= 0 && idx < elems.length);
+                            console.log('toIndex: Numeric answer, idx=', idx, 'valid=', valid, 'elems.length=', elems.length);
+                            return valid ? idx : -1;
                         }
+                        
                         // text match (case-insensitive)
                         const lower = String(ans).trim().toLowerCase();
-                        return answersData.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+                        console.log('toIndex: Text answer, searching for:', lower);
+                        console.log('toIndex: Available answers:', answersData.map(a => String(a.text || '').trim().toLowerCase()));
+                        
+                        const foundIdx = answersData.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+                        console.log('toIndex: Found at index:', foundIdx);
+                        return foundIdx;
                     };
 
                     switch (questionData.data.type) {
@@ -714,12 +728,43 @@ class QuestionSolver {
 
                         case AnswerType.RADIO:
                             // Normalize to index and check within this question only
+                            console.log('RADIO DEBUG: gptResponse.correctAnswers =', gptResponse.correctAnswers);
+                            console.log('RADIO DEBUG: elems (answer elements) =', elems);
+                            console.log('RADIO DEBUG: answersData =', answersData);
+                            
                             const radioIdx = toIndex((gptResponse.correctAnswers || [])[0]);
+                            console.log('RADIO DEBUG: Calculated radioIdx =', radioIdx);
+                            console.log('RADIO DEBUG: Target element at radioIdx =', elems[radioIdx]);
+                            
                             if (radioIdx >= 0 && elems[radioIdx]) {
+                                console.log('RADIO DEBUG: Attempting to select radio button at index', radioIdx);
+                                
                                 // uncheck others first to be safe
-                                elems.forEach(el => { if (el.type === 'radio') el.checked = false; });
+                                elems.forEach((el, idx) => { 
+                                    if (el.type === 'radio') {
+                                        console.log(`RADIO DEBUG: Unchecking radio ${idx}, current checked=${el.checked}`);
+                                        el.checked = false; 
+                                    }
+                                });
+                                
+                                // Check the selected radio
+                                console.log('RADIO DEBUG: Setting checked=true on element', elems[radioIdx]);
                                 elems[radioIdx].checked = true;
+                                console.log('RADIO DEBUG: After setting checked, value is:', elems[radioIdx].checked);
+                                
+                                // Try multiple event types to ensure Moodle detects the change
                                 elems[radioIdx].dispatchEvent(new Event('change', { bubbles: true }));
+                                elems[radioIdx].dispatchEvent(new Event('click', { bubbles: true }));
+                                elems[radioIdx].dispatchEvent(new Event('input', { bubbles: true }));
+                                
+                                console.log('RADIO DEBUG: Events dispatched');
+                                
+                                // Verify it's actually checked
+                                setTimeout(() => {
+                                    console.log('RADIO DEBUG: Verification after 100ms - element checked:', elems[radioIdx].checked);
+                                }, 100);
+                            } else {
+                                console.error('RADIO DEBUG: Cannot select - radioIdx:', radioIdx, 'element exists:', !!elems[radioIdx]);
                             }
                             break;
 
