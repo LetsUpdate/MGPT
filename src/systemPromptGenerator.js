@@ -116,16 +116,26 @@ Important: You MUST return answers as numeric indices (0-based) referring to the
 Current Question Type: TEXT (Free Text Answer)
 
 Instructions:
-- Provide a clear, concise text answer
-- Be accurate and to the point
-- No need for lengthy explanations unless necessary
+- Answer like a student would: concise, direct, to the point
+- Include ONLY essential information needed to answer the question
+- NO unnecessary explanations, NO background context unless explicitly asked
+- Maximum brevity while maintaining accuracy and completeness
+- Focus on the core answer, avoid elaboration
 - Answer in the same language as the question
+- Think: "What's the shortest correct answer a student would give in an exam?"
 
 Response Format:
 {
   "type": "text",
-  "answer": "Your answer here"
-}`;
+  "answer": "Your brief, direct answer here"
+}
+
+Style Examples:
+✓ GOOD: "Pipelining overlaps instruction execution stages to improve CPU throughput"
+✗ AVOID: "Pipelining is an important concept in computer architecture where we try to improve performance by overlapping different stages..."
+
+✓ GOOD: "Cache stores frequently used data closer to the CPU for faster access"
+✗ AVOID: "Well, a cache is a special type of memory that computer architects developed to solve the problem of slow memory access..."`;
     }
 
     /**
