@@ -116,8 +116,14 @@ class ChatGPTClient {
                             ? (data.choices[0].text || data.choices[0].message?.content || '')
                             : '';
 
+                        // Extract thinking/reasoning content for thinking models (o1, o1-mini, o3)
+                        const reasoning = data.choices && data.choices[0] && data.choices[0].message
+                            ? (data.choices[0].message.reasoning_content || null)
+                            : null;
+
                         resolve({
                             content,
+                            thinking: reasoning,
                             rawResponse: data
                         });
                     } catch (error) {

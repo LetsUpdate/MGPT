@@ -261,6 +261,17 @@ class GPTManager {
                             (data.choices[0].text || data.choices[0].message?.content || '') : 
                             '';
                         
+                        // Extract thinking/reasoning content for thinking models (o1, o1-mini, o3)
+                        const thinking = data.choices && data.choices[0] && data.choices[0].message
+                            ? (data.choices[0].message.reasoning_content || null)
+                            : null;
+                        
+                        // Log thinking process if available
+                        if (thinking) {
+                            Logger.info('THINKING', `Model reasoning process: ${thinking.substring(0, 500)}${thinking.length > 500 ? '...' : ''}`);
+                            Logger.debug('THINKING', `Full thinking process length: ${thinking.length} characters`);
+                        }
+                        
                         try {
                             // Try to parse the response as JSON
                             const parsedAnswer = JSON.parse(answer);
