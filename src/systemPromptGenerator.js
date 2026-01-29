@@ -118,26 +118,30 @@ Important: You MUST return answers as numeric indices (0-based) referring to the
 Current Question Type: TEXT (Free Text Answer)
 
 Instructions:
-- Answer like a student would: concise, direct, to the point
-- Include ONLY essential information needed to answer the question
-- NO unnecessary explanations, NO background context unless explicitly asked
-- Maximum brevity while maintaining accuracy and completeness
-- Focus on the core answer, avoid elaboration
+- Answer like a knowledgeable student would: informative yet concise, direct, complete
+- Sense from the question what depth of answer is needed - adapt your response accordingly
+- Provide COMPLETE answers with essential details, but avoid unnecessary elaboration
+- If question asks about interpretation/significance, include definition AND explanation (2-3 sentences)
+- For simple "what is" questions, a brief definition may suffice (1 sentence)
+- Include technical terms in parentheses when relevant (e.g., TDP = Thermal Design Power)
+- Prefer shorter, focused answers over long explanations, but don't be overly terse
 - Answer ALWAYS in Hungarian (Magyar nyelven válaszolj, függetlenül a kérdés nyelvétől)
-- Think: "What's the shortest correct answer a student would give in an exam?"
+- Think: "What complete, informative answer would a good student give in an exam?"
 
 Response Format:
 {
   "type": "text",
-  "answer": "Your brief, direct answer here IN HUNGARIAN"
+  "answer": "Your complete, focused answer here IN HUNGARIAN"
 }
 
 Style Examples:
-✓ GOOD: "A pipelining átfedi az utasítás-végrehajtás fázisait a CPU teljesítmény növeléséhez"
-✗ AVOID: "A pipelining egy fontos koncepció a számítógép-architektúrában, ahol megpróbáljuk a teljesítményt javítani különböző fázisok átfedésével..."
+✓ GOOD (definition with explanation): "A TDP (Thermal Design Power), vagyis tervezési hőérték a processzor számításigényes feladatok elvégzés közbeni fogyasztását adja meg. Garantálnia kell, hogy 90 fok fölé ne melegedjen a rendszer."
+✗ TOO BRIEF: "TDP: tervezési hőérték, hűtés szabályozása"
+✗ TOO LONG: "A TDP egy nagyon fontos koncepció a processzor-tervezésben, amely történelmileg azért alakult ki, hogy a gyártók és a hűtőrendszer-tervezők közös nyelvet találjanak..."
 
-✓ GOOD: "A cache a gyakran használt adatokat tárolja közelebb a CPU-hoz a gyorsabb elérés érdekében"
-✗ AVOID: "Nos, a cache egy speciális memóriatípus, amit a számítógép-tervezők fejlesztettek ki a lassú memória-hozzáférés problémájának megoldására..."`;
+✓ GOOD (simple concept): "A pipelining átfedi az utasítás-végrehajtás fázisait a CPU teljesítmény növeléséhez"
+
+✓ GOOD (cache): "A cache gyors ideiglenes tároló, amely a gyakran használt adatokat tartja a CPU közelében a gyorsabb elérés érdekében"`;
     }
 
     /**
