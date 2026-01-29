@@ -411,6 +411,32 @@ class GPTManager {
                 Logger.debug('RESPONSES_API', 'Thinking process', { thinking: result.thinking });
             }
             
+            // Log annotations (file citations) if present
+            if (result.annotations && result.annotations.length > 0) {
+                Logger.debug('RESPONSES_API', `Annotations found: ${result.annotations.length}`);
+                result.annotations.forEach((ann, idx) => {
+                    Logger.debug('RESPONSES_API', `Annotation ${idx + 1}: ${JSON.stringify({type: ann.type, file_id: ann.file_id})}`);
+                });
+                
+                // Log file usage for verification
+                const fileCitations = result.annotations.filter(a => a.type === 'file_citation');
+                if (fileCitations.length > 0) {
+                    Logger.info('FILE_USAGE', `✅ Files were consulted! Count: ${fileCitations.length}`);
+                    fileCitations.forEach((citation, idx) => {
+                        const quote = citation.quote ? citation.quote.substring(0, 100) : citation.text.substring(0, 100);
+                        Logger.info('FILE_USAGE', `Citation ${idx + 1}: File ${citation.file_id} quoted: "${quote}..."`);
+                    });
+                    Logger.info('FILE_USAGE', `Total citations found: ${fileCitations.length}`);
+                } else {
+                    Logger.warn('FILE_USAGE', '⚠️ NO files were consulted in this response');
+                    Logger.warn('FILE_USAGE', 'Possible reasons:\n  - Question answerable without file context\n  - Files don\'t contain relevant information\n  - Assistant didn\'t find useful content');
+                }
+            } else {
+                Logger.debug('RESPONSES_API', 'No annotations found in response');
+                Logger.warn('FILE_USAGE', '⚠️ NO files were consulted in this response');
+                Logger.warn('FILE_USAGE', 'Possible reasons:\n  - Question answerable without file context\n  - Files don\'t contain relevant information\n  - Assistant didn\'t find useful content');
+            }
+            
             // Parse the response based on answer type
             return this._parseResponseForType(result.content, answerType, possibleAnswer, answerFieldsCount);
             

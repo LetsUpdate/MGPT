@@ -451,6 +451,26 @@ class ResponsesAPIClient {
 
                         const content = assistantMessage.content[0]?.text?.value || '';
                         
+                        // Extract annotations (file citations) if present
+                        const annotations = assistantMessage.content[0]?.text?.annotations || [];
+                        const extractedAnnotations = annotations.map(ann => {
+                            if (ann.type === 'file_citation') {
+                                return {
+                                    type: 'file_citation',
+                                    text: ann.text || '',
+                                    file_id: ann.file_citation?.file_id || '',
+                                    quote: ann.file_citation?.quote || ''
+                                };
+                            } else if (ann.type === 'file_path') {
+                                return {
+                                    type: 'file_path',
+                                    text: ann.text || '',
+                                    file_id: ann.file_path?.file_id || ''
+                                };
+                            }
+                            return ann;
+                        });
+                        
                         // Extract thinking if requested and available
                         let thinking = null;
                         if (includeThinking && assistantMessage.metadata?.thinking) {
@@ -460,6 +480,7 @@ class ResponsesAPIClient {
                         resolve({
                             content,
                             thinking,
+                            annotations: extractedAnnotations,
                             rawMessage: assistantMessage
                         });
                     } catch (error) {
