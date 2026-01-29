@@ -68,13 +68,19 @@ async function uploadFile({ filename, content }) {
  * Create an assistant with uploaded files
  * @param {Object} params
  * @param {string} params.name - Assistant name
- * @param {string} params.instructions - System instructions
+ * @param {string} params.instructions - System instructions (optional, defaults to Computer Architecture 2 prompt)
  * @param {Array<string>} params.fileIds - Array of file IDs from uploads
  * @returns {Promise<Object>} Created assistant
  */
-async function createAssistant({ name, instructions, fileIds = [] }) {
+async function createAssistant({ name = 'MGPT Assistant', instructions = '', fileIds = [] }) {
     try {
         const client = initResponsesClient();
+        
+        // If no instructions provided, use default system prompt
+        if (!instructions) {
+            const SystemPromptGenerator = require('./systemPromptGenerator');
+            instructions = SystemPromptGenerator.generate('text', 1, true); // forAssistant = true
+        }
         
         const result = await client.createAssistant({
             name,

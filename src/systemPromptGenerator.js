@@ -27,9 +27,15 @@ class SystemPromptGenerator {
      * @private
      */
     static get BASE_PROMPT() {
-        return `You are an academic assistant specialized in helping students understand and answer questions across various subjects, with particular expertise in Az adóoptimalizálás és a gazdaság kifehérítése.
+        return `You are an academic assistant specialized in helping students understand and answer questions across various subjects, with particular expertise in Computer Architecture 2 (Számítógép architektúrák 2).
 
-Your role is to analyze questions carefully and provide accurate answers.`;
+Your role is to analyze questions carefully and provide accurate, technically precise answers based on computer science and architecture principles.
+
+When answering questions:
+- Apply computer architecture concepts, principles, and best practices
+- Consider CPU design, memory hierarchies, instruction sets, pipelining, caching, and system organization
+- Reference relevant architectural models and standards when applicable
+- Provide technically accurate answers suitable for academic examination`;
     }
 
     /**
@@ -174,9 +180,16 @@ Response Format:
      * Generál egy teljes system promptot a megadott kérdéstípushoz
      * @param {string} answerType - A kérdés típusa (AnswerType enum értéke)
      * @param {number} answerFieldsCount - Mezők száma MULTIPLE_TEXT típusnál
+     * @param {boolean} forAssistant - Ha true, assistant instructions formátumban adja vissza (csak BASE_PROMPT)
      * @returns {string} A teljes system prompt
      */
-    static generate(answerType, answerFieldsCount = 1) {
+    static generate(answerType, answerFieldsCount = 1, forAssistant = false) {
+        // For assistants, return only the base prompt (instructions are persistent)
+        // The specific question-type instructions will be added to each message
+        if (forAssistant) {
+            return this.BASE_PROMPT;
+        }
+        
         const typeInstructions = {
             [AnswerType.RADIO]: this.RADIO_INSTRUCTIONS,
             [AnswerType.CHECKBOX]: this.CHECKBOX_INSTRUCTIONS,
@@ -188,6 +201,26 @@ Response Format:
 
         const specificInstructions = typeInstructions[answerType] || this.TEXT_INSTRUCTIONS;
         return this.BASE_PROMPT + '\n' + specificInstructions;
+    }
+    
+    /**
+     * Generál question-type specific instructions-t (BASE_PROMPT nélkül)
+     * Használatos amikor az assistant már rendelkezik BASE_PROMPT-tal az instructions-ben
+     * @param {string} answerType - A kérdés típusa
+     * @param {number} answerFieldsCount - Mezők száma MULTIPLE_TEXT típusnál
+     * @returns {string} Question-type specific instructions
+     */
+    static generateTypeInstructions(answerType, answerFieldsCount = 1) {
+        const typeInstructions = {
+            [AnswerType.RADIO]: this.RADIO_INSTRUCTIONS,
+            [AnswerType.CHECKBOX]: this.CHECKBOX_INSTRUCTIONS,
+            [AnswerType.SELECT]: this.SELECT_INSTRUCTIONS,
+            [AnswerType.TEXT]: this.TEXT_INSTRUCTIONS,
+            [AnswerType.MULTIPLE_TEXT]: this.getMultipleTextInstructions(answerFieldsCount),
+            [AnswerType.MATCHING]: this.MATCHING_INSTRUCTIONS
+        };
+
+        return typeInstructions[answerType] || this.TEXT_INSTRUCTIONS;
     }
 
     /**

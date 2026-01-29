@@ -144,15 +144,21 @@ class DocumentManager {
      * Create assistant with files
      * @param {Object} params
      * @param {string} params.name - Assistant name
-     * @param {string} params.instructions - Instructions
+     * @param {string} params.instructions - Instructions (optional, defaults to Computer Architecture 2 prompt)
      * @param {Array<string>} params.fileIds - File IDs
      * @returns {Promise<Object>} Created assistant
      */
-    async createAssistantWithFiles({ name, instructions, fileIds = [] }) {
+    async createAssistantWithFiles({ name = 'MGPT Assistant', instructions = '', fileIds = [] }) {
         Logger.info('DOC_MGMT', `Creating assistant: ${name} with ${fileIds.length} files`);
         
         try {
             const client = this.initClient();
+            
+            // If no instructions provided, use default system prompt
+            if (!instructions) {
+                const SystemPromptGenerator = require('./systemPromptGenerator');
+                instructions = SystemPromptGenerator.generate('text', 1, true); // forAssistant = true
+            }
             
             Logger.logAPIRequest('DOC_MGMT', '/assistants', 'POST', { name, fileCount: fileIds.length });
             

@@ -390,8 +390,10 @@ class GPTManager {
             }
             
             // Add format instructions based on answer type
-            const systemPrompt = SystemPromptGenerator.generate(answerType, answerFieldsCount);
-            fullQuestion += `\n\n${systemPrompt}`;
+            // Note: The assistant already has BASE_PROMPT in its instructions
+            // We only need to add the question-type specific instructions here
+            const typeInstructions = SystemPromptGenerator.generateTypeInstructions(answerType, answerFieldsCount);
+            fullQuestion += `\n\n${typeInstructions}`;
             
             Logger.debug('RESPONSES_API', 'Sending message to assistant', {
                 assistantId: config.assistantId,

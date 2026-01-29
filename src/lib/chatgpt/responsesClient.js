@@ -141,7 +141,7 @@ class ResponsesAPIClient {
      * This is a simplified version - for production use, create vector stores separately.
      * @param {Object} params
      * @param {string} params.name - Assistant name
-     * @param {string} params.instructions - System instructions
+     * @param {string} params.instructions - System instructions (defaults to Computer Architecture 2 prompt)
      * @param {Array<string>} params.fileIds - Array of file IDs (will be added to a vector store)
      * @param {Object} params.tools - Tools to enable (e.g., code_interpreter, file_search)
      * @returns {Promise<Object>} Assistant creation response
@@ -159,6 +159,18 @@ class ResponsesAPIClient {
 
         // Use assistant-compatible model
         const assistantModel = this.getAssistantCompatibleModel();
+        
+        // If no instructions provided, use default system prompt for Computer Architecture 2
+        // Import SystemPromptGenerator if not already imported
+        if (!instructions) {
+            try {
+                const SystemPromptGenerator = require('../../systemPromptGenerator');
+                instructions = SystemPromptGenerator.generate('text', 1, true); // forAssistant = true
+            } catch (error) {
+                // Fallback if SystemPromptGenerator not available
+                instructions = 'You are an academic assistant specialized in Computer Architecture 2 (Számítógép architektúrák 2). Analyze questions carefully and provide accurate, technically precise answers.';
+            }
+        }
 
         const requestBody = {
             model: assistantModel,
