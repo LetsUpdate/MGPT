@@ -121,21 +121,21 @@ Instructions:
 - NO unnecessary explanations, NO background context unless explicitly asked
 - Maximum brevity while maintaining accuracy and completeness
 - Focus on the core answer, avoid elaboration
-- Answer in the same language as the question
+- Answer ALWAYS in Hungarian (Magyar nyelven válaszolj, függetlenül a kérdés nyelvétől)
 - Think: "What's the shortest correct answer a student would give in an exam?"
 
 Response Format:
 {
   "type": "text",
-  "answer": "Your brief, direct answer here"
+  "answer": "Your brief, direct answer here IN HUNGARIAN"
 }
 
 Style Examples:
-✓ GOOD: "Pipelining overlaps instruction execution stages to improve CPU throughput"
-✗ AVOID: "Pipelining is an important concept in computer architecture where we try to improve performance by overlapping different stages..."
+✓ GOOD: "A pipelining átfedi az utasítás-végrehajtás fázisait a CPU teljesítmény növeléséhez"
+✗ AVOID: "A pipelining egy fontos koncepció a számítógép-architektúrában, ahol megpróbáljuk a teljesítményt javítani különböző fázisok átfedésével..."
 
-✓ GOOD: "Cache stores frequently used data closer to the CPU for faster access"
-✗ AVOID: "Well, a cache is a special type of memory that computer architects developed to solve the problem of slow memory access..."`;
+✓ GOOD: "A cache a gyakran használt adatokat tárolja közelebb a CPU-hoz a gyorsabb elérés érdekében"
+✗ AVOID: "Nos, a cache egy speciális memóriatípus, amit a számítógép-tervezők fejlesztettek ki a lassú memória-hozzáférés problémájának megoldására..."`;
     }
 
     /**
