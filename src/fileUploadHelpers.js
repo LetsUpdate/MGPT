@@ -121,6 +121,91 @@ async function sendMessage({ message, includeThinking = false }) {
     }
 }
 
+/**
+ * List all uploaded files
+ * @returns {Array} List of uploaded files with metadata
+ */
+function listFiles() {
+    try {
+        const config = configStore.getConfig();
+        const files = config.uploadedFiles || [];
+        
+        console.log(`📁 Uploaded files: ${files.length}`);
+        files.forEach((file, index) => {
+            console.log(`   ${index + 1}. ${file.filename} (ID: ${file.id})`);
+            console.log(`      Uploaded: ${file.uploadedAt}`);
+            console.log(`      Size: ${file.size} bytes`);
+        });
+        
+        return files;
+    } catch (error) {
+        console.error('❌ Failed to list files:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Get information about a specific file
+ * @param {string} fileId - File ID to get info for
+ * @returns {Object|null} File information or null if not found
+ */
+function getFileInfo(fileId) {
+    try {
+        const config = configStore.getConfig();
+        const files = config.uploadedFiles || [];
+        const file = files.find(f => f.id === fileId);
+        
+        if (file) {
+            console.log(`📄 File info:`);
+            console.log(`   Filename: ${file.filename}`);
+            console.log(`   ID: ${file.id}`);
+            console.log(`   Uploaded: ${file.uploadedAt}`);
+            console.log(`   Size: ${file.size} bytes`);
+            console.log(`   Purpose: ${file.purpose}`);
+            return file;
+        } else {
+            console.warn(`⚠️ File not found: ${fileId}`);
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Failed to get file info:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Delete an uploaded file
+ * @param {string} fileId - File ID to delete
+ * @returns {Promise<boolean>} True if deleted successfully
+ */
+async function deleteFile(fileId) {
+    try {
+        const client = initResponsesClient();
+        
+        // Get file info before deletion for logging
+        const config = configStore.getConfig();
+        const file = (config.uploadedFiles || []).find(f => f.id === fileId);
+        const filename = file ? file.filename : fileId;
+        
+        console.log(`🗑️ Deleting file: ${filename} (${fileId})...`);
+        
+        // Delete from OpenAI
+        await client.deleteFile(fileId);
+        
+        // Remove from local config
+        const uploadedFiles = (config.uploadedFiles || []).filter(f => f.id !== fileId);
+        configStore.update({ uploadedFiles });
+        
+        console.log(`✅ File deleted successfully: ${filename}`);
+        console.log(`   Remaining files: ${uploadedFiles.length}`);
+        
+        return true;
+    } catch (error) {
+        console.error('❌ File deletion failed:', error.message);
+        throw error;
+    }
+}
+
 // Expose functions to global scope for console access
 function exposeToConsole() {
     try {
@@ -129,11 +214,17 @@ function exposeToConsole() {
         w.MGPT_uploadFile = uploadFile;
         w.MGPT_createAssistant = createAssistant;
         w.MGPT_sendMessage = sendMessage;
+        w.MGPT_listFiles = listFiles;
+        w.MGPT_getFileInfo = getFileInfo;
+        w.MGPT_deleteFile = deleteFile;
         
-        console.log('🚀 MGPT File Upload API ready!');
-        console.log('   Use: MGPT_uploadFile({ filename, content })');
-        console.log('   Use: MGPT_createAssistant({ name, instructions, fileIds })');
-        console.log('   Use: MGPT_sendMessage({ message, includeThinking })');
+        console.log('🚀 MGPT File Management API ready!');
+        console.log('   📤 MGPT_uploadFile({ filename, content })');
+        console.log('   🤖 MGPT_createAssistant({ name, instructions, fileIds })');
+        console.log('   💬 MGPT_sendMessage({ message, includeThinking })');
+        console.log('   📁 MGPT_listFiles() - List all uploaded files');
+        console.log('   ℹ️  MGPT_getFileInfo(fileId) - Get file details');
+        console.log('   🗑️  MGPT_deleteFile(fileId) - Delete a file');
     } catch (e) {
         console.warn('Could not expose MGPT helpers to console:', e);
     }
@@ -143,5 +234,8 @@ module.exports = {
     uploadFile,
     createAssistant,
     sendMessage,
+    listFiles,
+    getFileInfo,
+    deleteFile,
     exposeToConsole
 };
