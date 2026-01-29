@@ -743,11 +743,17 @@ class QuestionSolver {
                             const DEBUG_RADIO_SELECTION = true; // Set to false to disable debug logging
                             
                             // Normalize to index and check within this question only
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: gptResponse =', gptResponse);
                             if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: gptResponse.correctAnswers =', gptResponse.correctAnswers);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: gptResponse.answer =', gptResponse.answer);
                             if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: elems (answer elements) =', elems);
                             if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: answersData =', answersData);
                             
-                            const radioIdx = toIndex((gptResponse.correctAnswers || [])[0]);
+                            // Support both correctAnswers (standard API) and answer (Responses API fallback)
+                            const answerValue = gptResponse.correctAnswers ? (gptResponse.correctAnswers[0]) : gptResponse.answer;
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: answerValue to convert =', answerValue);
+                            
+                            const radioIdx = toIndex(answerValue);
                             if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Calculated radioIdx =', radioIdx);
                             if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Target element at radioIdx =', elems[radioIdx]);
                             

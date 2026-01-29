@@ -443,17 +443,35 @@ class GPTManager {
                     const indices = matches.map(m => parseInt(m));
                     const answers = indices.map(idx => possibleAnswer[idx]).filter(Boolean);
                     Logger.info('PARSING', 'Extracted checkbox/select answers', answers);
-                    return { type: answerType, answer: answers };
+                    return { type: answerType, correctAnswers: answers };
                 }
             } else if (answerType === AnswerType.RADIO) {
-                // Extract single answer
+                // Extract single answer - try index first, then text matching
                 const match = content.match(/\d+/);
                 if (match) {
                     const idx = parseInt(match[0]);
-                    const answer = possibleAnswer[idx];
-                    Logger.info('PARSING', 'Extracted radio answer', answer);
-                    return { type: answerType, answer };
+                    if (idx >= 0 && idx < possibleAnswer.length) {
+                        const answer = possibleAnswer[idx];
+                        Logger.info('PARSING', 'Extracted radio answer by index', answer);
+                        return { type: answerType, correctAnswers: [answer] };
+                    }
                 }
+                
+                // If no index found, try to match answer text directly
+                const trimmedContent = content.trim();
+                const matchingAnswer = possibleAnswer.find(ans => 
+                    ans.toLowerCase().includes(trimmedContent.toLowerCase()) || 
+                    trimmedContent.toLowerCase().includes(ans.toLowerCase())
+                );
+                
+                if (matchingAnswer) {
+                    Logger.info('PARSING', 'Extracted radio answer by text match', matchingAnswer);
+                    return { type: answerType, correctAnswers: [matchingAnswer] };
+                }
+                
+                // Fallback: return the raw text in correctAnswers array
+                Logger.warn('PARSING', 'Could not match radio answer, returning raw text', trimmedContent);
+                return { type: answerType, correctAnswers: [trimmedContent] };
             }
             
             // Default: return as text
