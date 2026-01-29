@@ -35,7 +35,9 @@ When answering questions:
 - Apply computer architecture concepts, principles, and best practices
 - Consider CPU design, memory hierarchies, instruction sets, pipelining, caching, and system organization
 - Reference relevant architectural models and standards when applicable
-- Provide technically accurate answers suitable for academic examination`;
+- Provide technically accurate answers suitable for academic examination
+- DO NOT include citation markers (like 【...】) or source references in your answer text
+- Provide clean, direct answers without bibliographic notation`;
     }
 
     /**
