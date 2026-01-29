@@ -1,4 +1,10 @@
 // Question Solver Module
+//
+// NOTE: This version includes extensive debug logging for radio button selection issues.
+// The DEBUG_RADIO and DEBUG_RADIO_SELECTION flags (around lines 650 and 735) should be set to false
+// or replaced with a proper debug configuration before production deployment.
+// This logging is temporary to help identify and fix radio button selection problems.
+//
 //const gptManager = require('./gptManager');
 const {gptManager, AnswerType} = require('./gptManager');
 const configStore = require('./configStore');
@@ -644,17 +650,36 @@ class QuestionSolver {
 
                     const elems = questionData.elements.answerElements || [];
                     const answersData = questionData.data.answers || [];
+                    
+                    // TODO: Replace with debug flag before production
+                    // This extensive logging is temporary for debugging radio button selection issue
+                    const DEBUG_RADIO = true; // Set to false to disable debug logging
+                    
                     const toIndex = (ans) => {
                         // Convert a single answer (number or text) to index within this question
-                        if (ans === null || ans === undefined) return -1;
+                        if (DEBUG_RADIO) console.log('toIndex: Converting answer:', ans, 'type:', typeof ans);
+                        
+                        if (ans === null || ans === undefined) {
+                            if (DEBUG_RADIO) console.log('toIndex: Answer is null/undefined, returning -1');
+                            return -1;
+                        }
+                        
                         // number-like
                         if (!isNaN(ans)) {
                             const idx = parseInt(ans, 10);
-                            return (idx >= 0 && idx < elems.length) ? idx : -1;
+                            const valid = (idx >= 0 && idx < elems.length);
+                            if (DEBUG_RADIO) console.log('toIndex: Numeric answer, idx=', idx, 'valid=', valid, 'elems.length=', elems.length);
+                            return valid ? idx : -1;
                         }
+                        
                         // text match (case-insensitive)
                         const lower = String(ans).trim().toLowerCase();
-                        return answersData.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+                        if (DEBUG_RADIO) console.log('toIndex: Text answer, searching for:', lower);
+                        if (DEBUG_RADIO) console.log('toIndex: Available answers:', answersData.map(a => String(a.text || '').trim().toLowerCase()));
+                        
+                        const foundIdx = answersData.findIndex(a => String(a.text || '').trim().toLowerCase() === lower);
+                        if (DEBUG_RADIO) console.log('toIndex: Found at index:', foundIdx);
+                        return foundIdx;
                     };
 
                     switch (questionData.data.type) {
@@ -713,13 +738,57 @@ class QuestionSolver {
                             break;
 
                         case AnswerType.RADIO:
+                            // TODO: Replace with debug flag before production
+                            // This extensive logging is temporary for debugging radio button selection issue
+                            const DEBUG_RADIO_SELECTION = true; // Set to false to disable debug logging
+                            
                             // Normalize to index and check within this question only
-                            const radioIdx = toIndex((gptResponse.correctAnswers || [])[0]);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: gptResponse =', gptResponse);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: gptResponse.correctAnswers =', gptResponse.correctAnswers);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: gptResponse.answer =', gptResponse.answer);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: elems (answer elements) =', elems);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: answersData =', answersData);
+                            
+                            // Support both correctAnswers (standard API) and answer (Responses API fallback)
+                            const answerValue = gptResponse.correctAnswers ? (gptResponse.correctAnswers[0]) : gptResponse.answer;
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: answerValue to convert =', answerValue);
+                            
+                            const radioIdx = toIndex(answerValue);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Calculated radioIdx =', radioIdx);
+                            if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Target element at radioIdx =', elems[radioIdx]);
+                            
                             if (radioIdx >= 0 && elems[radioIdx]) {
+                                if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Attempting to select radio button at index', radioIdx);
+                                
                                 // uncheck others first to be safe
-                                elems.forEach(el => { if (el.type === 'radio') el.checked = false; });
+                                elems.forEach((el, idx) => { 
+                                    if (el.type === 'radio') {
+                                        if (DEBUG_RADIO_SELECTION) console.log(`RADIO DEBUG: Unchecking radio ${idx}, current checked=${el.checked}`);
+                                        el.checked = false; 
+                                    }
+                                });
+                                
+                                // Check the selected radio
+                                if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Setting checked=true on element', elems[radioIdx]);
                                 elems[radioIdx].checked = true;
+                                if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: After setting checked, value is:', elems[radioIdx].checked);
+                                
+                                // Try multiple event types to ensure Moodle detects the change
+                                // Note: Only change event is standard; click/input are added for compatibility
                                 elems[radioIdx].dispatchEvent(new Event('change', { bubbles: true }));
+                                // Some Moodle versions may use click handlers
+                                elems[radioIdx].dispatchEvent(new Event('click', { bubbles: true }));
+                                
+                                if (DEBUG_RADIO_SELECTION) console.log('RADIO DEBUG: Events dispatched');
+                                
+                                // Verify it's actually checked (helps identify if Moodle overrides it)
+                                if (DEBUG_RADIO_SELECTION) {
+                                    setTimeout(() => {
+                                        console.log('RADIO DEBUG: Verification after 100ms - element checked:', elems[radioIdx].checked);
+                                    }, 100);
+                                }
+                            } else {
+                                if (DEBUG_RADIO_SELECTION) console.error('RADIO DEBUG: Cannot select - radioIdx:', radioIdx, 'element exists:', !!elems[radioIdx]);
                             }
                             break;
 

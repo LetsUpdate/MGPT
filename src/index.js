@@ -2,9 +2,11 @@
 const { LookForCaptcha } = require('./captchaSolver');
 const {PlaceLogo} = require('./UImodul');
  */
-const configPanel = require("./configPanel");
+// Use modular UI component
+const configPanel = require("./ui/configPanel");
 const configStore = require("./configStore");
 const questionSolver = require("./questionSolver");
+const fileUploadHelpers = require("./fileUploadHelpers");
 
 
 
@@ -22,6 +24,9 @@ const questionSolver = require("./questionSolver");
 
             // Initialize the solver panel
             questionSolver.init();
+
+            // Expose file upload helpers to console
+            fileUploadHelpers.exposeToConsole();
 
             console.log('MoodleGPT initialized successfully');
         } catch (error) {

@@ -1,8 +1,9 @@
 // GPT Manager for handling GPT interactions and configurations
 const configStore = require('./configStore');
 const scriptConfig = require('./config');
-const ragClient = require('./ragClient');
 const SystemPromptGenerator = require('./systemPromptGenerator');
+const { ChatGPTClient, ResponsesAPIClient } = require('./lib/chatgpt');
+const { Logger } = require('./logger');
 
 
 // Global GPT manager instance
@@ -29,82 +30,7 @@ class GPTManager {
         }
         gptManagerInstance = this;
         this.initialized = false;
-    }
-
-    /**
-     * Optionally rewrites a question into a short, RAG-friendly query.
-     * Falls back to original on error.
-     */
-    async rewriteQuery(originalQuestion, cfg) {
-        try {
-            const maxChars = Math.max(40, Number(cfg.ragQueryMaxChars || 160));
-            const instruction = `Rewrite the following question into a concise search query optimised for semantic retrieval.\n` +
-                `- Keep it under ${maxChars} characters.\n` +
-                `- Use the primary language of the question.\n` +
-                `- Preserve key entities, numbers, and constraints.\n` +
-                `- Output ONLY the single-line query, with no quotes or extra text.`;
-
-            const prompt = `${instruction}\n\nQuestion:\n${originalQuestion}`;
-            const text = await this._sendMinimal(prompt, cfg, { max_tokens: 64, temperature: 0.2 });
-            const oneline = String((text || '').split('\n')[0]).trim();
-            if (!oneline) return originalQuestion;
-            // Hard truncate to maxChars just in case
-            return oneline.length > maxChars ? oneline.slice(0, maxChars) : oneline;
-        } catch (e) {
-            console.warn('rewriteQuery failed, using original question:', e?.message || e);
-            return originalQuestion;
-        }
-    }
-
-    /**
-     * Sends a minimal text request to the configured endpoint and returns raw text content.
-     * This bypasses RAG and the answer-type handling.
-     */
-    async _sendMinimal(userContent, cfg, opts = {}) {
-        const endpointUrl = (cfg.apiUrl || scriptConfig.API_URL);
-        const model = "gpt-4o"//cfg.model;
-        const apiKey = cfg.apiKey;
-        const useMessages = typeof endpointUrl === 'string' && endpointUrl.includes('/chat');
-
-        const baseBody = { model };
-        let requestBody;
-        if (useMessages) {
-            // Avoid system for mini models; send as a single user message
-            const modelName = String(model || '').toLowerCase();
-            const modelDisallowsSystem = /mini|^o1|^o4/.test(modelName);
-            if (modelDisallowsSystem) {
-                requestBody = { ...baseBody, messages: [{ role: 'user', content: userContent }], ...opts };
-            } else {
-                requestBody = { ...baseBody, messages: [
-                    { role: 'system', content: 'You rewrite queries. Output only the final rewritten query.' },
-                    { role: 'user', content: userContent }
-                ], ...opts };
-            }
-        } else {
-            requestBody = { ...baseBody, prompt: userContent, max_tokens: 80, temperature: 0.2, ...opts };
-        }
-
-        const payload = JSON.stringify(requestBody);
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: endpointUrl,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                data: payload,
-                onload: (response) => {
-                    try {
-                        if (response.status !== 200) throw new Error('HTTP ' + response.status);
-                        const body = JSON.parse(response.responseText);
-                        const text = body.choices && body.choices[0] ? (body.choices[0].text || body.choices[0].message?.content || '') : '';
-                        resolve(String(text || ''));
-                    } catch (e) { reject(e); }
-                },
-                onerror: (e) => reject(e)
-            });
-        });
+        this.chatClient = null;
     }
 
     /**
@@ -119,8 +45,17 @@ class GPTManager {
             const config = configStore.getConfig();
             if (!config.apiKey) {
                 console.warn('GPT API key not set. Please configure in settings.');
-            }else
+            } else {
+                // Initialize ChatGPT client with config
+                this.chatClient = new ChatGPTClient({
+                    apiKey: config.apiKey,
+                    apiUrl: config.apiUrl,
+                    model: config.model,
+                    temperature: config.temperature,
+                    maxTokens: config.maxTokens
+                });
                 this.initialized = true;
+            }
         } catch (error) {
             console.error('Failed to initialize GPT Manager:', error);
             throw error;
@@ -169,31 +104,25 @@ class GPTManager {
             console.warn('MULTIPLE_TEXT requires answerFieldsCount >= 1, defaulting to 1');
         }
 
-        // Optionally retrieve RAG context
-        let contextPrefix = '';
-        try {
-            const cfg = configStore.getConfig();
-            if (cfg.ragEnabled) {
-                const topK = Number(cfg.ragTopK || 5);
-                let ragQueryText = question;
-                if (cfg.ragQueryOptimizeEnabled) {
-                    ragQueryText = await this.rewriteQuery(question, cfg);
-                    if (ragQueryText && ragQueryText !== question) {
-                        console.debug('RAG optimized query:', ragQueryText);
-                    }
-                }
-                const { contexts } = await ragClient.query(ragQueryText, topK);
-                if (contexts && contexts.length) {
-                    const ctxText = contexts.map((c, i) => `[[Chunk ${i+1} | score=${(c.score ?? 0).toFixed(3)}]]\n${c.text}`).join('\n\n');
-                    contextPrefix = `Relevant knowledge (from your local corpus):\n${ctxText}\n\n`;
-                }
+        // ====== RESPONSES API INTEGRATION ======
+        // Check if Responses API is enabled and configured
+        if (config.useResponsesAPI && config.assistantId) {
+            Logger.logQuizQuestion(question, answerType, true);
+            Logger.logContextVerification(true, config.uploadedFiles?.length || 0, config.assistantId);
+            
+            try {
+                return await this._askWithResponsesAPI(question, possibleAnswer, answerType, answerFieldsCount, config);
+            } catch (error) {
+                Logger.error('QUIZ', 'Responses API failed, falling back to standard API', error);
+                // Fall through to standard API on error
             }
-        } catch (e) {
-            console.warn('RAG retrieval failed or disabled:', e?.message || e);
+        } else {
+            Logger.logQuizQuestion(question, answerType, false);
         }
+        // ====== END RESPONSES API INTEGRATION ======
 
-        // Construct simplified prompt - most instructions are now in system prompt
-        let fullPrompt = `${contextPrefix}${question}`;
+        // Construct prompt with question and optional context
+        let fullPrompt = question;
         
         // Add short answer instruction for TEXT/MULTIPLE_TEXT types
         if ((answerType === AnswerType.TEXT || answerType === AnswerType.MULTIPLE_TEXT) && config.shortAnswerMode) {
@@ -247,7 +176,7 @@ class GPTManager {
                 // do not support the 'system' role. Detect common mini/completion models and
                 // if detected, send a single 'user' message that contains the system prompt + prompt.
                 const modelName = String(config.model || '').toLowerCase();
-                const modelDisallowsSystem = /mini|^o1|^o4/.test(modelName);
+                const modelDisallowsSystem = /mini|^o1|^o3/.test(modelName);
 
                 if (modelDisallowsSystem) {
                     requestBody.messages = [
@@ -331,6 +260,17 @@ class GPTManager {
                         const answer = data.choices && data.choices[0] ? 
                             (data.choices[0].text || data.choices[0].message?.content || '') : 
                             '';
+                        
+                        // Extract thinking/reasoning content for thinking models (o1, o1-mini, o3)
+                        const thinking = data.choices && data.choices[0] && data.choices[0].message
+                            ? (data.choices[0].message.reasoning_content || null)
+                            : null;
+                        
+                        // Log thinking process if available
+                        if (thinking) {
+                            Logger.info('THINKING', `Model reasoning process: ${thinking.substring(0, 500)}${thinking.length > 500 ? '...' : ''}`);
+                            Logger.debug('THINKING', `Full thinking process length: ${thinking.length} characters`);
+                        }
                         
                         try {
                             // Try to parse the response as JSON
@@ -416,6 +356,167 @@ class GPTManager {
      */
     updateConfig(newConfig) {
         configStore.update(newConfig);
+    }
+
+    /**
+     * Ask GPT using Responses API (Assistants)
+     * @private
+     */
+    async _askWithResponsesAPI(question, possibleAnswer, answerType, answerFieldsCount, config) {
+        Logger.info('RESPONSES_API', 'Starting Responses API request');
+        
+        try {
+            // Initialize Responses API client
+            const responsesClient = new ResponsesAPIClient({
+                apiKey: config.apiKey,
+                model: config.model
+            });
+            
+            responsesClient.assistantId = config.assistantId;
+            responsesClient.threadId = config.threadId;
+            
+            // Build the question with context
+            let fullQuestion = question;
+            
+            // Add short answer instruction
+            if ((answerType === AnswerType.TEXT || answerType === AnswerType.MULTIPLE_TEXT) && config.shortAnswerMode) {
+                fullQuestion += `\n\n⚠️ IMPORTANT: Keep your answer(s) EXTREMELY SHORT and CONCISE. Use minimal words, abbreviations where possible, no explanations. Maximum 3-5 words per answer.`;
+            }
+            
+            // Add possible answers
+            if (possibleAnswer && possibleAnswer.length > 0) {
+                fullQuestion += "\n\nPossible answers:\n" + 
+                    possibleAnswer.map((ans, idx) => `${idx}. ${ans}`).join('\n');
+            }
+            
+            // Add format instructions based on answer type
+            // Note: The assistant already has BASE_PROMPT in its instructions
+            // We only need to add the question-type specific instructions here
+            const typeInstructions = SystemPromptGenerator.generateTypeInstructions(answerType, answerFieldsCount);
+            fullQuestion += `\n\n${typeInstructions}`;
+            
+            Logger.debug('RESPONSES_API', 'Sending message to assistant', {
+                assistantId: config.assistantId,
+                threadId: config.threadId,
+                questionLength: fullQuestion.length
+            });
+            
+            // Send message
+            Logger.logAPIRequest('RESPONSES_API', '/threads/messages', 'POST');
+            const result = await responsesClient.sendMessage({
+                message: fullQuestion,
+                includeThinking: true // Enable thinking for better debugging
+            });
+            Logger.logAPIResponse('RESPONSES_API', '/threads/messages', 200);
+            
+            // Save thread ID for next question
+            if (responsesClient.threadId !== config.threadId) {
+                configStore.update({ threadId: responsesClient.threadId });
+                Logger.debug('RESPONSES_API', 'Thread ID updated', { threadId: responsesClient.threadId });
+            }
+            
+            Logger.info('RESPONSES_API', 'Response received', {
+                contentLength: result.content?.length || 0,
+                hasThinking: !!result.thinking
+            });
+            
+            if (result.thinking) {
+                Logger.debug('RESPONSES_API', 'Thinking process', { thinking: result.thinking });
+            }
+            
+            // Log annotations (file citations) if present
+            if (result.annotations && result.annotations.length > 0) {
+                Logger.debug('RESPONSES_API', `Annotations found: ${result.annotations.length}`);
+                result.annotations.forEach((ann, idx) => {
+                    Logger.debug('RESPONSES_API', `Annotation ${idx + 1}: ${JSON.stringify({type: ann.type, file_id: ann.file_id})}`);
+                });
+                
+                // Log file usage for verification
+                const fileCitations = result.annotations.filter(a => a.type === 'file_citation');
+                if (fileCitations.length > 0) {
+                    Logger.info('FILE_USAGE', `✅ Files were consulted! Count: ${fileCitations.length}`);
+                    fileCitations.forEach((citation, idx) => {
+                        const quote = citation.quote ? citation.quote.substring(0, 100) : citation.text.substring(0, 100);
+                        Logger.info('FILE_USAGE', `Citation ${idx + 1}: File ${citation.file_id} quoted: "${quote}..."`);
+                    });
+                    Logger.info('FILE_USAGE', `Total citations found: ${fileCitations.length}`);
+                } else {
+                    Logger.warn('FILE_USAGE', '⚠️ NO files were consulted in this response');
+                    Logger.warn('FILE_USAGE', 'Possible reasons:\n  - Question answerable without file context\n  - Files don\'t contain relevant information\n  - Assistant didn\'t find useful content');
+                }
+            } else {
+                Logger.debug('RESPONSES_API', 'No annotations found in response');
+                Logger.warn('FILE_USAGE', '⚠️ NO files were consulted in this response');
+                Logger.warn('FILE_USAGE', 'Possible reasons:\n  - Question answerable without file context\n  - Files don\'t contain relevant information\n  - Assistant didn\'t find useful content');
+            }
+            
+            // Parse the response based on answer type
+            return this._parseResponseForType(result.content, answerType, possibleAnswer, answerFieldsCount);
+            
+        } catch (error) {
+            Logger.error('RESPONSES_API', 'Request failed', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Parse response based on answer type
+     * @private
+     */
+    _parseResponseForType(content, answerType, possibleAnswer, answerFieldsCount) {
+        Logger.debug('PARSING', `Parsing response for type: ${answerType}`);
+        
+        try {
+            // Try to parse as JSON first
+            const parsed = JSON.parse(content);
+            Logger.info('PARSING', 'Successfully parsed JSON response', parsed);
+            return parsed;
+        } catch (e) {
+            // If not JSON, try to extract answer from text
+            Logger.debug('PARSING', 'Response is not JSON, parsing as text');
+            
+            if (answerType === AnswerType.CHECKBOX || answerType === AnswerType.SELECT) {
+                // Extract array of answers
+                const matches = content.match(/\d+/g);
+                if (matches) {
+                    const indices = matches.map(m => parseInt(m));
+                    const answers = indices.map(idx => possibleAnswer[idx]).filter(Boolean);
+                    Logger.info('PARSING', 'Extracted checkbox/select answers', answers);
+                    return { type: answerType, correctAnswers: answers };
+                }
+            } else if (answerType === AnswerType.RADIO) {
+                // Extract single answer - try index first, then text matching
+                const match = content.match(/\d+/);
+                if (match) {
+                    const idx = parseInt(match[0]);
+                    if (idx >= 0 && idx < possibleAnswer.length) {
+                        const answer = possibleAnswer[idx];
+                        Logger.info('PARSING', 'Extracted radio answer by index', answer);
+                        return { type: answerType, correctAnswers: [answer] };
+                    }
+                }
+                
+                // If no index found, try to match answer text directly
+                const trimmedContent = content.trim();
+                const matchingAnswer = possibleAnswer.find(ans => 
+                    ans.toLowerCase().includes(trimmedContent.toLowerCase()) || 
+                    trimmedContent.toLowerCase().includes(ans.toLowerCase())
+                );
+                
+                if (matchingAnswer) {
+                    Logger.info('PARSING', 'Extracted radio answer by text match', matchingAnswer);
+                    return { type: answerType, correctAnswers: [matchingAnswer] };
+                }
+                
+                // Fallback: return the raw text in correctAnswers array
+                Logger.warn('PARSING', 'Could not match radio answer, returning raw text', trimmedContent);
+                return { type: answerType, correctAnswers: [trimmedContent] };
+            }
+            
+            // Default: return as text
+            Logger.info('PARSING', 'Returning as text answer');
+            return { type: answerType, answer: content.trim() };
+        }
     }
 
     /**
