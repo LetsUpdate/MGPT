@@ -158,6 +158,12 @@ const ConfigPanel = (() => {
           <small>Részletes naplók megjelenítése a konzolban és a napló nézetben.</small>
         </div>
         
+        <div class="gpt-config-field">
+          <label for="hideConsoleLogs">🔇 Konzol Naplók Elrejtése:</label>
+          <input type="checkbox" id="hideConsoleLogs" ${currentConfig.hideConsoleLogs ? 'checked' : ''}>
+          <small>Ha be van kapcsolva, a naplók nem jelennek meg a böngésző konzolban.</small>
+        </div>
+        
         <div class="gpt-config-field" style="background: rgba(100,100,100,0.05); padding: 6px; border-radius: 3px;">
           <button class="gpt-config-show-logs" style="width: 100%; padding: 4px; font-size: 9px; background: #6c757d; color: white;">📜 Naplók Megtekintése</button>
         </div>
@@ -423,6 +429,7 @@ const ConfigPanel = (() => {
     const maxParallelQuestionsInput = panelElement.querySelector('#maxParallelQuestions');
     const useResponsesAPIInput = panelElement.querySelector('#useResponsesAPI');
     const debugLoggingInput = panelElement.querySelector('#debugLogging');
+    const hideConsoleLogsInput = panelElement.querySelector('#hideConsoleLogs');
 
     if (apiKeyInput) apiKeyInput.value = config.apiKey || '';
     if (modelSelect) modelSelect.value = config.model || 'o1-mini';
@@ -457,6 +464,7 @@ const ConfigPanel = (() => {
     if (maxParallelQuestionsInput) maxParallelQuestionsInput.value = Number(config.maxParallelQuestions || 10);
     if (useResponsesAPIInput) useResponsesAPIInput.checked = Boolean(config.useResponsesAPI);
     if (debugLoggingInput) debugLoggingInput.checked = config.debugLogging !== false;
+    if (hideConsoleLogsInput) hideConsoleLogsInput.checked = Boolean(config.hideConsoleLogs);
     
     // Update status displays
     updateAssistantStatus();
@@ -481,6 +489,7 @@ const ConfigPanel = (() => {
     const maxParallelQuestions = Number(panelElement.querySelector('#maxParallelQuestions').value || 10);
     const useResponsesAPI = panelElement.querySelector('#useResponsesAPI').checked;
     const debugLogging = panelElement.querySelector('#debugLogging').checked;
+    const hideConsoleLogs = panelElement.querySelector('#hideConsoleLogs').checked;
 
     // Only set isConfigured to true if API key is valid
     if (!isValidApiKey(apiKey)) {
@@ -498,6 +507,7 @@ const ConfigPanel = (() => {
       maxParallelQuestions,
       useResponsesAPI,
       debugLogging,
+      hideConsoleLogs,
       isConfigured: true
     };
 

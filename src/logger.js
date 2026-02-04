@@ -55,23 +55,25 @@ class Logger {
             logEntries = logEntries.slice(-MAX_LOGS);
         }
 
-        // Console output with color coding
-        const prefix = `[${entry.timestamp}] [${level}] [${category}]`;
-        const fullMessage = `${prefix} ${message}`;
-        
-        switch (level) {
-            case LogLevel.DEBUG:
-                console.log(`%c${fullMessage}`, 'color: #888', data || '');
-                break;
-            case LogLevel.INFO:
-                console.log(`%c${fullMessage}`, 'color: #0066cc', data || '');
-                break;
-            case LogLevel.WARN:
-                console.warn(fullMessage, data || '');
-                break;
-            case LogLevel.ERROR:
-                console.error(fullMessage, data || '');
-                break;
+        // Console output with color coding (only if hideConsoleLogs is false)
+        if (!config.hideConsoleLogs) {
+            const prefix = `[${entry.timestamp}] [${level}] [${category}]`;
+            const fullMessage = `${prefix} ${message}`;
+            
+            switch (level) {
+                case LogLevel.DEBUG:
+                    console.log(`%c${fullMessage}`, 'color: #888', data || '');
+                    break;
+                case LogLevel.INFO:
+                    console.log(`%c${fullMessage}`, 'color: #0066cc', data || '');
+                    break;
+                case LogLevel.WARN:
+                    console.warn(fullMessage, data || '');
+                    break;
+                case LogLevel.ERROR:
+                    console.error(fullMessage, data || '');
+                    break;
+            }
         }
 
         // Notify listeners
