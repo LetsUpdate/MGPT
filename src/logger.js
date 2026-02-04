@@ -56,7 +56,8 @@ class Logger {
         }
 
         // Console output with color coding (only if hideConsoleLogs is false)
-        if (!config.hideConsoleLogs) {
+        // Note: ERROR logs are always shown for debugging purposes
+        if (!config.hideConsoleLogs || level === LogLevel.ERROR) {
             const prefix = `[${entry.timestamp}] [${level}] [${category}]`;
             const fullMessage = `${prefix} ${message}`;
             

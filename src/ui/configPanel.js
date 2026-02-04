@@ -161,7 +161,7 @@ const ConfigPanel = (() => {
         <div class="gpt-config-field">
           <label for="hideConsoleLogs">🔇 Konzol Naplók Elrejtése:</label>
           <input type="checkbox" id="hideConsoleLogs" ${currentConfig.hideConsoleLogs ? 'checked' : ''}>
-          <small>Ha be van kapcsolva, a naplók nem jelennek meg a böngésző konzolban.</small>
+          <small>Ha be van kapcsolva, a naplók nem jelennek meg a böngésző konzolban (hibák mindig látszanak).</small>
         </div>
         
         <div class="gpt-config-field" style="background: rgba(100,100,100,0.05); padding: 6px; border-radius: 3px;">
