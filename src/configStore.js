@@ -24,7 +24,9 @@ const DEFAULT_CONFIG = {
     threadId: null,
     uploadedFiles: [],
     // Debug logging
-    debugLogging: true
+    debugLogging: true,
+    // Hide console logs
+    hideConsoleLogs: false
 };
 
 // Configuration change listeners
